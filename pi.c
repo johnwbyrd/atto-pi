@@ -442,7 +442,7 @@ void calculate_pi_bellard(uint16_t digits, uint8_t guard_digits) {
         t = t + 10;                       /* Increment t-counter */
         k = k + 3;                        /* Increment main counter (3 digits) */
         
-    } while (k <= digits);
+    } while (digit_counter < digits);
     
     /* Clean up and report results */
     deallocate_bignums();
@@ -500,7 +500,7 @@ void deallocate_bignums(void) {
 }
 
 int main(void) {
-    uint16_t digits = 30; 
+    uint16_t digits = 100; 
     uint8_t guard = 3;
     
     printf("Calculating pi to %u+ digits...\n", digits);
