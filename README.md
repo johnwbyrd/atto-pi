@@ -2,7 +2,7 @@
 
 **Author**: John Byrd <johnwbyrd at gmail dot com>
 
-This program implements Fabrice Bellard's 2009 formula for computing pi, which is a spigot algorithm that generates decimal digits sequentially without storing the entire result. Unlike the more famous Bailey-Borwein-Plouffe formula, Bellard's approach works in base-1000, producing three decimal digits per iteration rather than hexadecimal digits.
+This program implements [Fabrice Bellard's 2009 formula](https://bellard.org/pi/) for computing pi, which is a spigot algorithm that generates decimal digits sequentially without storing the entire result. Unlike the more famous [Bailey-Borwein-Plouffe formula](https://observablehq.com/@rreusser/computing-with-the-bailey-borwein-plouffe-formula), Bellard's approach works in base-1000, producing three decimal digits per iteration rather than hexadecimal digits.
 
 The mathematical foundation is the infinite series:
 
@@ -10,7 +10,7 @@ $$\pi = \frac{1}{2^6} \sum_{n=0}^{\infty} \frac{(-1)^n}{2^{10n}} \left[ \frac{-2
 
 Each iteration evaluates seven rational terms, alternating between addition and subtraction. The denominators grow as functions of the iteration counter, requiring arbitrary-precision division to maintain accuracy across thousands of digits.
 
-This particular implementation was inspired by David Banks (hoglet)'s recent work on implementing this spigot on the BBC Micro in BASIC. It was written for the LLVM-MOS C/C++ compiler, but it should work on other reasonably standards compliant compilers as well.
+This particular implementation was inspired by [David Banks (hoglet)'s recent work](https://github.com/BigEd/pi-spigot-for-micros) on implementing spigots on the BBC Micro. It was written for the LLVM-MOS C/C++ compiler, but it should work on other reasonably standards compliant compilers as well.
 
 ## Arithmetic implementation
 
