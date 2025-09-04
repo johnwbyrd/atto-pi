@@ -1,6 +1,8 @@
 /*
- * Bellard's Formula Pi Calculator for LLVM-MOS 6502 Target
- * 
+ * pi.c
+ *
+ * Author: John Byrd <johnwbyrd at gmail dot com>
+ *
  * This program implements Fabrice Bellard's 2009 formula for computing pi, 
  * which is a spigot algorithm that generates decimal digits sequentially 
  * without storing the entire result. Unlike the more famous Bailey-Borwein-
@@ -18,11 +20,16 @@
  * requiring arbitrary-precision division to maintain accuracy across thousands 
  * of digits.
  *
+ * This particular implementation was inspired by David Banks (hoglet)'s recent
+ * work on implementing this spigot on the BBC Micro in BASIC. It was written
+ * for the LLVM-MOS C/C++ compiler, but it should work on other reasonably
+ * standards compliant compilers as well. 
+ *
  * - Arithmetic implementation
  *
  * The core challenge lies in performing high-precision arithmetic on a system 
  * with only 8-bit native operations and 16-bit addressing. The solution uses 
- * "bignums" - arbitrary-precision numbers represented as arrays of bytes in 
+ * "bignums" -- arbitrary-precision numbers represented as arrays of bytes in 
  * little-endian format. Each bignum stores a fixed-point number where the 
  * integer part occupies the highest-indexed byte and the fractional part 
  * extends downward through lower indices.
@@ -67,6 +74,12 @@
  * taking advantage of the binary representation.
  *
  * - Precision and limits
+ * 
+ * This algorithm runs relatively soonish, if 100 digits are requested. It
+ * can do 1000, if you're prepared to wait a while.  And it can generate 10000
+ * digits of pi on a Commodore 64, but don't expect that result anytime soon,
+ * because it seems to require several minutes to generate even 3 digits from 
+ * that spigot.
  *
  * The implementation's maximum capacity stems from the integer types chosen 
  * for loop counters. The main iteration counter k uses uint16_t and increments 
@@ -137,7 +150,10 @@
 
 #define BELLARD_TERM_COUNT 7
 
-size_t __heap_default_limit = 16384;
+/* This value needs be overridden from the default malloc() implementation
+ * in most cases; this value seems to work up to 10000 digits
+ */
+size_t __heap_default_limit = 2 << 14;
 
 uint64_t D;
 int16_t L;
@@ -397,7 +413,7 @@ void calculate_pi_bellard(uint16_t digits, uint8_t guard_digits) {
             if (group_counter == 10) {
 #ifdef GROUP_OUTPUTS
                 printf("\n");            /* Line break every 10 groups (30 digits) */
-#endif GROUP_OUTPUTS
+#endif // GROUP_OUTPUTS
                 group_counter = 0;       /* Reset counter */
             }
         } else {
@@ -484,10 +500,10 @@ void deallocate_bignums(void) {
 }
 
 int main(void) {
-    uint16_t digits = 500;
+    uint16_t digits = 100;
     uint8_t guard = 3;
     
-    printf("Calculating pi to %u+ digits...\n", digits, guard);
+    printf("Calculating pi to %u+ digits...\n", digits);
     calculate_pi_bellard(digits, guard);
     
     return 0;
