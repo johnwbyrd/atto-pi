@@ -233,7 +233,7 @@ void bignum_set(uint8_t *bignum, uint32_t value) {
  * infinite series. Uses binary long division processing 8 bits at a time.
  */
 void bignum_div_addsub(int is_subtract) {
-    uint64_t T = 0;              /* Running remainder for division */
+    uint32_t T = 0;              /* Running remainder for division */
     uint64_t D_original = D;     /* Preserve original divisor */
     
     /* Process bignum from most significant to least significant byte */
