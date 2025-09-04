@@ -395,7 +395,9 @@ void calculate_pi_bellard(uint16_t digits, uint8_t guard_digits) {
             digit_counter += 3;          /* Each iteration produces 3 digits */
             group_counter++;             /* Count groups of 3 digits */
             if (group_counter == 10) {
+#ifdef GROUP_OUTPUTS
                 printf("\n");            /* Line break every 10 groups (30 digits) */
+#endif GROUP_OUTPUTS
                 group_counter = 0;       /* Reset counter */
             }
         } else {
@@ -482,16 +484,11 @@ void deallocate_bignums(void) {
 }
 
 int main(void) {
-    uint16_t digits = 10000;
+    uint16_t digits = 500;
     uint8_t guard = 3;
     
-    printf("Calculating pi to %u digits with %u guard digits...\n", digits, guard);
+    printf("Calculating pi to %u+ digits...\n", digits, guard);
     calculate_pi_bellard(digits, guard);
     
     return 0;
 }
-
-#ifdef DEBUG
-void dump_bignum(const char *label, uint8_t *bignum, int32_t size);
-void verify_precision(void);
-#endif
