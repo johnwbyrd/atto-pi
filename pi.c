@@ -404,7 +404,7 @@ void calculate_pi_bellard(uint16_t digits, uint8_t guard_digits) {
         
         /* Extract three digits from sum's integer part */
         uint32_t digit_val = *(uint32_t *)(SumP + Big - 1);
-        
+         
         /* Output digits with appropriate formatting */
         if (k > 0) {
             printf("%03lu ", (unsigned long)digit_val);
@@ -418,7 +418,7 @@ void calculate_pi_bellard(uint16_t digits, uint8_t guard_digits) {
             }
         } else {
             printf("%lu.\n", (unsigned long)digit_val);  /* First digit with decimal */
-            digit_counter += 3;          /* First iteration also produces 3 digits */
+            digit_counter += 1;          /* First iteration produces 1 digit */
             /* Don't count first iteration toward group counter */
         }
         
@@ -500,7 +500,7 @@ void deallocate_bignums(void) {
 }
 
 int main(void) {
-    uint16_t digits = 100;
+    uint16_t digits = 30; 
     uint8_t guard = 3;
     
     printf("Calculating pi to %u+ digits...\n", digits);
