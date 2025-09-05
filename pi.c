@@ -2,14 +2,14 @@
  * pi.c
  *
  * Author: John Byrd <johnwbyrd at gmail dot com>
- * 
+ *
  * See README.md for details
  */
 
+#include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include <assert.h>
 
 #ifdef __llvm_mos__
 extern char __heap_start;
@@ -21,7 +21,8 @@ extern char __heap_start;
  * by using only putchar for output, reducing the binary size significantly.
  */
 void print_str(const char *s) {
-    while (*s) putchar(*s++);
+    while (*s)
+        putchar(*s++);
 }
 
 void print_three_digit(uint32_t val) {
@@ -42,7 +43,8 @@ void print_uint(uint16_t val) {
         buf[i++] = '0' + (val % 10);
         val /= 10;
     } while (val);
-    while (i--) putchar(buf[i]);
+    while (i--)
+        putchar(buf[i]);
 }
 
 #ifdef __llvm_mos__
@@ -53,12 +55,50 @@ void print_uint(uint16_t val) {
 size_t __heap_default_limit = 42 * 1024;
 #endif
 
-uint64_t D;
-int16_t L;
-int16_t M;
-uint16_t Big;
-uint8_t *SumP;        
-uint8_t *NumeratorP;  
+/* Global variables for Bellard's pi calculation algorithm.
+ * These maintain state across all bignum operations and track the
+ * precision boundaries as the calculation progresses.
+ */
+
+/* Divisor used in bignum_div_addsub() for each term of Bellard's formula.
+ * Ranges from small values (t+1) to large products like (t+9)*256.
+ * Must be 64-bit to handle the largest denominators without overflow.
+ */
+uint64_t divisor;
+
+/* Lower index bound for active bignum precision window.
+ * Represents the leftmost (least significant) byte still containing
+ * meaningful fractional data. Increments as precision requirements grow
+ * with each iteration, optimizing computation by skipping leading zeros.
+ */
+int16_t precision_lower;
+
+/* Upper index bound for active bignum precision window.
+ * Represents the rightmost (most significant) byte containing non-zero
+ * numerator data. Decrements as the numerator shrinks through rescaling,
+ * reducing unnecessary computation in later iterations.
+ */
+int16_t precision_upper;
+
+/* Size of each bignum array in bytes, calculated from requested digits.
+ * Equals (digits * 0.415241) + guard_digits, providing sufficient binary
+ * precision to accurately represent the requested decimal precision.
+ */
+uint16_t bignum_size;
+
+/* Pointer to the sum accumulator bignum.
+ * Stores the running total of all Bellard formula terms. The integer part
+ * (highest byte) contains digits ready for output, while the fractional
+ * part accumulates precision for future iterations.
+ */
+uint8_t *sum_accumulator;
+
+/* Pointer to the numerator bignum.
+ * Starts at 4 and is rescaled by 250/256 each iteration to maintain the
+ * mathematical relationship required by Bellard's formula. Divided by each
+ * term's denominator to produce quotients added to sum_accumulator.
+ */
+uint8_t *numerator;
 
 /*
  * Bignum arithmetic functions
@@ -70,7 +110,8 @@ uint8_t *NumeratorP;
 void bignum_set(uint8_t *bignum, uint32_t value);
 
 /* Perform division and add or subtract the quotient into the sum bignum.
- * This implements the core mathematical operation for each term in Bellard's formula */
+ * This implements the core mathematical operation for each term in Bellard's
+ * formula */
 void bignum_div_addsub(int is_subtract);
 
 /* Rescale a bignum by the factor 250/256, used to prevent numerator overflow
@@ -116,12 +157,12 @@ void calculate_pi_bellard(uint16_t digits, uint8_t guard_digits);
  * for the Bellard formula terms.
  */
 void bignum_set(uint8_t *bignum, uint32_t value) {
-    /* Clear fractional portion from L to Big-1 */
-    for (uint16_t i = L; i < Big; i++) {
+    /* Clear fractional portion from precision_lower to bignum_size-1 */
+    for (uint16_t i = precision_lower; i < bignum_size; i++) {
         *(bignum + i) = 0;
     }
     /* Place integer value at highest position (32-bit write) */
-    *(uint32_t *)(bignum + Big - 1) = value;
+    *(uint32_t *)(bignum + bignum_size - 1) = value;
 }
 
 /*
@@ -131,37 +172,39 @@ void bignum_set(uint8_t *bignum, uint32_t value) {
  * infinite series. Uses binary long division processing 8 bits at a time.
  */
 void bignum_div_addsub(int is_subtract) {
-    uint64_t T = 0;              /* Running remainder for division */
-    uint64_t D_original = D;     /* Preserve original divisor */
-    
+    uint64_t remainder = 0;              /* Running remainder for division */
+    uint64_t divisor_original = divisor; /* Preserve original divisor */
+
     /* Process bignum from most significant to least significant byte */
-    for (int16_t i = M; i >= L; i--) {
+    for (int16_t i = precision_upper; i >= precision_lower; i--) {
         /* Build up remainder: shift left 8 bits and add next byte */
-        T = T * 256 + *(NumeratorP + i);
-        uint16_t B = 0;          /* Quotient byte being constructed */
-        D *= 256;                /* Scale divisor to match remainder */
-        
+        remainder = remainder * 256 + *(numerator + i);
+        uint16_t quotient_byte = 0; /* Quotient byte being constructed */
+        divisor *= 256;             /* Scale divisor to match remainder */
+
         /* Binary division: extract 8 bits one at a time */
         for (uint8_t j = 0; j <= 7; j++) {
-            B *= 2;              /* Shift quotient bit left */
-            D /= 2;              /* Halve divisor for this bit */
-            if (T >= D) {
-                T -= D;          /* Remainder -= divisor */
-                B += 1;          /* Set quotient bit */
+            quotient_byte *= 2; /* Shift quotient bit left */
+            divisor /= 2;       /* Halve divisor for this bit */
+            if (remainder >= divisor) {
+                remainder -= divisor; /* Remainder -= divisor */
+                quotient_byte += 1;   /* Set quotient bit */
             }
         }
-        
+
         /* Add or subtract quotient byte into sum with carry propagation */
-        uint8_t *tmps = SumP + i;
+        uint8_t *sum_ptr = sum_accumulator + i;
         do {
-            int32_t tmp = is_subtract ? (*tmps - B) : (*tmps + B);
-            *tmps++ = tmp & 255; /* Store low byte */
-            B = (tmp >= 0 && tmp <= 255) ? 0 : 1;  /* Carry/borrow */
-        } while (B);
+            int32_t tmp = is_subtract ? (*sum_ptr - quotient_byte)
+                                      : (*sum_ptr + quotient_byte);
+            *sum_ptr++ = tmp & 255; /* Store low byte */
+            /* Carry/borrow continues if result outside byte range */
+            quotient_byte = (tmp >= 0 && tmp <= 255) ? 0 : 1;
+        } while (quotient_byte);
     }
-    
+
     /* Restore original divisor for next term */
-    D = D_original;
+    divisor = divisor_original;
 }
 
 /*
@@ -170,12 +213,12 @@ void bignum_div_addsub(int is_subtract) {
  * This maintains precision balance between sum and numerator across iterations.
  */
 void bignum_rescale(uint8_t *bignum) {
-    bignum_multiply_250(bignum);         /* Multiply by 250 */
+    bignum_multiply_250(bignum); /* Multiply by 250 */
     /* Divide by 256: shift all bytes down one position */
-    for (uint16_t i = L; i < Big; i++) {
+    for (uint16_t i = precision_lower; i < bignum_size; i++) {
         *(bignum + i) = *(bignum + i + 1);
     }
-    *(bignum + Big) = 0;                 /* Clear vacated high byte */
+    *(bignum + bignum_size) = 0; /* Clear vacated high byte */
 }
 
 /*
@@ -185,9 +228,9 @@ void bignum_rescale(uint8_t *bignum) {
  * byte and one extra byte for safety.
  */
 void bignum_mask_digits(uint8_t *bignum) {
-    uint16_t i = Big - 1;
-    *(bignum + i) = 0;                   /* Clear integer part */
-    *(bignum + i + 1) = 0;               /* Clear extra byte for safety */
+    uint16_t i = bignum_size - 1;
+    *(bignum + i) = 0;     /* Clear integer part */
+    *(bignum + i + 1) = 0; /* Clear extra byte for safety */
 }
 
 /*
@@ -199,14 +242,14 @@ void bignum_mask_digits(uint8_t *bignum) {
 void bignum_multiply_250(uint8_t *bignum) {
     uint32_t temp;
     uint32_t carry = 0;
-    
+
     /* Process from least to most significant byte */
-    for (uint16_t i = L; i <= Big; i++) {
+    for (uint16_t i = precision_lower; i <= bignum_size; i++) {
         temp = (uint32_t)(*(bignum + i)) * 250 + carry;
-        *(bignum + i) = temp & 255;      /* Store low byte */
-        carry = temp >> 8;               /* Propagate high byte as carry */
+        *(bignum + i) = temp & 255; /* Store low byte */
+        carry = temp >> 8;          /* Propagate high byte as carry */
     }
-    
+
     /* Verify no final carry (indicates sufficient precision) */
     if (carry > 0) {
         assert(0 && "bignum_multiply_250 should end with carry = 0");
@@ -222,14 +265,14 @@ void bignum_multiply_250(uint8_t *bignum) {
 void bignum_multiply_1000(uint8_t *bignum) {
     uint32_t temp;
     uint32_t carry = 0;
-    
+
     /* Process from least to most significant byte */
-    for (uint16_t i = L; i <= Big; i++) {
+    for (uint16_t i = precision_lower; i <= bignum_size; i++) {
         temp = (uint32_t)(*(bignum + i)) * 1000 + carry;
-        *(bignum + i) = temp & 255;      /* Store low byte */
-        carry = temp >> 8;               /* Propagate high byte as carry */
+        *(bignum + i) = temp & 255; /* Store low byte */
+        carry = temp >> 8;          /* Propagate high byte as carry */
     }
-    
+
     /* Verify no final carry (indicates sufficient precision) */
     if (carry > 0) {
         assert(0 && "bignum_multiply_1000 should end with carry = 0");
@@ -243,96 +286,106 @@ void bignum_multiply_1000(uint8_t *bignum) {
  */
 void calculate_pi_bellard(uint16_t digits, uint8_t guard_digits) {
     /* Initialize memory and precision tracking */
-    Big = calculate_bignum_size(digits, guard_digits);
-    allocate_bignums(Big);
-    
-    /* Set up bignum array bounds: L tracks leading zeros, M tracks precision */
-    int32_t base = 0;                    /* Tracks fractional precision needs (fixed-point, *128) */
-    L = 0;                               /* Lower bound starts at 0 */
-    M = Big - 1;                         /* Upper bound at end of array */
-    
+    bignum_size = calculate_bignum_size(digits, guard_digits);
+    allocate_bignums(bignum_size);
+
+    /* Set up bignum array bounds: track precision window that shrinks
+     * as calculation progresses. Base tracks fractional precision growth
+     * in fixed-point arithmetic (scaled by 128 for integer math).
+     */
+    int32_t base = 0;                  /* Precision tracker (*128) */
+    precision_lower = 0;               /* Lower bound starts at 0 */
+    precision_upper = bignum_size - 1; /* Upper bound at array end */
+
     /* Initialize numerator to 4 (coefficient from Bellard's formula) */
-    bignum_set(NumeratorP, 4);
-    
+    bignum_set(numerator, 4);
+
     /* Initialize loop counters: k=iteration*3, f=iteration*4, t=iteration*10 */
-    uint16_t k = 0;                      /* Main iteration counter */
-    uint32_t f = 0;                      /* Secondary counter for f-terms */
-    uint64_t t = 0;                      /* Tertiary counter for t-terms */
-    uint8_t op = 1;                      /* Operation toggle: 1=add, 0=subtract */
-    
+    uint16_t k = 0; /* Main iteration counter */
+    uint32_t f = 0; /* Secondary counter for f-terms */
+    uint64_t t = 0; /* Tertiary counter for t-terms */
+    uint8_t op = 1; /* Operation toggle: 1=add, 0=subtract */
+
     /* Initialize sum accumulator to 4 */
-    bignum_set(SumP, 4);
-    
-    uint16_t digit_counter = 0;          /* Track digits output for reporting */
-    
+    bignum_set(sum_accumulator, 4);
+
+    uint16_t digit_counter = 0; /* Track digits output for reporting */
+
     /* Main calculation loop: each iteration produces 3 digits */
     do {
         /* Compute the seven terms of Bellard's formula */
-        
-        /* Term 1: -2^5/(4n+1) = -32/(t+1) */
-        D = t + 1;
-        if (k > 0) {                     /* Skip first iteration adjustment */
+
+        /* Term 1: -2^5/(4n+1) = -32/(t+1)
+         * First term special: skip on k=0 to handle initial value correctly
+         */
+        divisor = t + 1;
+        if (k > 0) {
             bignum_div_addsub(1 - op);
         }
-        
+
         /* Term 2: -1/(4n+3) = -1/((t+3)*4) */
-        D = (t + 3) * 4;
+        divisor = (t + 3) * 4;
         bignum_div_addsub(op);
-        
+
         /* Term 3: +2^8/(10n+1) = +256/((t+5)*64) */
-        D = (t + 5) * 64;
+        divisor = (t + 5) * 64;
         bignum_div_addsub(op);
-        
+
         /* Term 4: -2^6/(10n+3) = -64/((t+7)*64) */
-        D = (t + 7) * 64;
+        divisor = (t + 7) * 64;
         bignum_div_addsub(op);
-        
+
         /* Term 5: -2^2/(10n+5) = -4/((t+9)*256) */
-        D = (t + 9) * 256;
+        divisor = (t + 9) * 256;
         bignum_div_addsub(1 - op);
-        
+
         /* Term 6: -2^2/(10n+7) = -4/((f+1)*8) */
-        D = (f + 1) * 8;
+        divisor = (f + 1) * 8;
         bignum_div_addsub(op);
-        
+
         /* Term 7: +1/(10n+9) = +1/((f+3)*256) */
-        D = (f + 3) * 256;
+        divisor = (f + 3) * 256;
         bignum_div_addsub(op);
-        
+
         /* Extract three digits from sum's integer part */
-        uint32_t digit_val = *(uint32_t *)(SumP + Big - 1);
-         
+        uint32_t digit_val = *(uint32_t *)(sum_accumulator + bignum_size - 1);
+
         /* Output digits with appropriate formatting */
         if (k > 0) {
             print_three_digit(digit_val);
-            digit_counter += 3;          /* Each iteration produces 3 digits */
+            digit_counter += 3; /* Each iteration produces 3 digits */
         } else {
-            print_uint(digit_val); putchar('.'); putchar('\n');  /* First digit with decimal */
-            digit_counter += 1;          /* First iteration produces 1 digit */
+            print_uint(digit_val);
+            putchar('.');
+            putchar('\n');      /* First digit with decimal */
+            digit_counter += 1; /* First iteration produces 1 digit */
         }
-        
+
         /* Prepare for next iteration */
-        bignum_mask_digits(SumP);        /* Remove extracted digits */
-        bignum_multiply_1000(SumP);      /* Shift next digits into position */
-        bignum_rescale(NumeratorP);      /* Apply 250/256 scaling */
-        
+        bignum_mask_digits(sum_accumulator);   /* Remove extracted digits */
+        bignum_multiply_1000(sum_accumulator); /* Shift next 3 digits up */
+        bignum_rescale(numerator);             /* Apply 250/256 scaling */
+
         /* Toggle operation sign for alternating series */
         op = 1 - op;
-        
-        /* Adjust precision tracking as numerator shrinks */
-        if (*(NumeratorP + M) == 0) {
-            M = M - 1;
+
+        /* Adjust precision tracking as numerator shrinks from rescaling */
+        if (*(numerator + precision_upper) == 0) {
+            precision_upper = precision_upper - 1;
         }
-        
-        /* Update loop variables for next iteration */
-        base += 159;                      /* Track fractional precision needs (159/128 ≈ 1.2421875) */
-        L = base / 128;                   /* Update lower bound */
-        f = f + 4;                        /* Increment f-counter */
-        t = t + 10;                       /* Increment t-counter */
-        k = k + 3;                        /* Increment main counter (3 digits) */
-        
+
+        /* Update loop variables for next iteration.
+         * Base grows by 159/128 ≈ 1.2422, empirically determined to match
+         * the rate at which precision requirements increase per 3 digits.
+         */
+        base += 159;
+        precision_lower = base / 128; /* Convert to byte index */
+        f = f + 4;                    /* Increment f-counter */
+        t = t + 10;                   /* Increment t-counter */
+        k = k + 3;                    /* Increment main counter (3 digits) */
+
     } while (digit_counter < digits);
-    
+
     /* Clean up and report results */
     deallocate_bignums();
     print_str("\nCalculated ");
@@ -369,29 +422,29 @@ uint16_t calculate_bignum_size(uint16_t digits, uint8_t guard) {
  * with error message if allocation fails.
  */
 void allocate_bignums(uint16_t size) {
-    const uint16_t pad = 4;              /* Padding for safe 32-bit reads */
-    
+    const uint16_t pad = 4; /* Padding for safe 32-bit reads */
+
     /* Allocate sum accumulator with error checking */
-    SumP = (uint8_t *) malloc(size + pad);
-    if (!SumP) {
-        print_str("Error: Failed to alloc SumP: ");
+    sum_accumulator = (uint8_t *)malloc(size + pad);
+    if (!sum_accumulator) {
+        print_str("Error: Failed to alloc sum_accumulator: ");
         print_uint(size + pad);
         exit(1);
     }
-    
+
     /* Allocate numerator with error checking */
-    NumeratorP = (uint8_t *) malloc(size + pad);
-    if (!NumeratorP) {
-        print_str("Failed to alloc NumeratorP: ");
+    numerator = (uint8_t *)malloc(size + pad);
+    if (!numerator) {
+        print_str("Failed to alloc numerator: ");
         print_uint(size + pad);
-        free(SumP);                      /* Clean up partial allocation */
+        free(sum_accumulator); /* Clean up partial allocation */
         exit(1);
     }
-    
+
     /* Initialize both arrays to zero */
     for (uint16_t i = 0; i < size + pad; i++) {
-        *(SumP + i) = 0;
-        *(NumeratorP + i) = 0;
+        *(sum_accumulator + i) = 0;
+        *(numerator + i) = 0;
     }
 }
 
@@ -400,8 +453,8 @@ void allocate_bignums(uint16_t size) {
  * Called at end of calculation to prevent memory leaks.
  */
 void deallocate_bignums(void) {
-    free(SumP);
-    free(NumeratorP);
+    free(sum_accumulator);
+    free(numerator);
 }
 
 int main(void) {

@@ -1,0 +1,16 @@
+# LLVM coding style for automatic formatting
+# This will be used by clangd and clang-format tools
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 80
+
+# Some common customizations for C projects (optional)
+# You can uncomment and modify these if needed:
+# AllowShortFunctionsOnASingleLine: None
+# AllowShortIfStatementsOnASingleLine: Never
+# AllowShortLoopsOnASingleLine: false
+# AlwaysBreakAfterReturnType: None
+# BreakBeforeBraces: Attach
+# SpaceAfterCStyleCast: false
+# PointerAlignment: Right
+# SortIncludes: true
