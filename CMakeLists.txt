@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.18)
+set(LLVM_MOS_PLATFORM sim)
+find_package(llvm-mos-sdk REQUIRED)
+project(pi)
+add_executable(pi.prg pi.c)
