@@ -2,11 +2,11 @@
 
 **Author**: John Byrd <johnwbyrd at gmail dot com>
 
-This program implements [Fabrice Bellard's 2009 formula](https://bellard.org/pi/) for computing pi, which is a spigot algorithm that generates decimal digits sequentially without storing the entire result. Unlike the more famous [Bailey-Borwein-Plouffe formula](https://observablehq.com/@rreusser/computing-with-the-bailey-borwein-plouffe-formula), Bellard's approach works in base-1000, producing three decimal digits per iteration rather than hexadecimal digits.
+This program implements François Bellard's unpublished 1997 decimal spigot algorithm for computing pi, which is a spigot algorithm that generates decimal digits sequentially without storing the entire result. Unlike the more famous [Bailey-Borwein-Plouffe formula](https://observablehq.com/@rreusser/computing-with-the-bailey-borwein-plouffe-formula), this decimal adaptation of Bellard's binary series works in base-1000, producing three decimal digits per iteration rather than hexadecimal digits.
 
 The mathematical foundation is the infinite series:
 
-$$\pi = \frac{1}{2^6} \sum_{n=0}^{\infty} \frac{(-1)^n}{2^{10n}} \left[ \frac{-2^5}{4n+1} - \frac{1}{4n+3} + \frac{2^8}{10n+1} - \frac{2^6}{10n+3} - \frac{2^2}{10n+5} - \frac{2^2}{10n+7} + \frac{1}{10n+9} \right]$$
+$$\pi = \sum_{n=0}^{\infty} \left( \frac{-32}{4n+1} - \frac{1}{4n+3} + \frac{256}{10n+1} - \frac{64}{10n+3} - \frac{4}{10n+5} - \frac{4}{4n+1} + \frac{1}{4n+3} \right) \cdot 2^{-10n-6}$$
 
 Each iteration evaluates seven rational terms, alternating between addition and subtraction. The denominators grow as functions of the iteration counter, requiring arbitrary-precision division to maintain accuracy across thousands of digits.
 
@@ -16,7 +16,7 @@ This particular implementation was inspired by [David Banks (hoglet)'s recent wo
 
 The core challenge lies in performing high-precision arithmetic on a system with only 8-bit native operations and 16-bit addressing. The solution uses "bignums" -- arbitrary-precision numbers represented as arrays of bytes in little-endian format. Each bignum stores a fixed-point number where the integer part occupies the highest-indexed byte and the fractional part extends downward through lower indices.
 
-The size of each bignum is calculated as $\frac{\text{digits} \times 5}{12} + \text{guard}$, where the guard digits provide computational headroom to prevent rounding errors from accumulating. This formula derives from the convergence properties of Bellard's series and ensures sufficient precision for the requested output.
+The size of each bignum is calculated as $\text{digits} \times \frac{\log_2(10)}{8} + \text{guard}$, where the constant $\frac{\log_2(10)}{8} \approx 0.415241$ represents the bytes needed per decimal digit, and the guard digits provide computational headroom to prevent rounding errors from accumulating. This formula derives from the convergence properties of Bellard's series and ensures sufficient precision for the requested output.
 
 Division operations use binary long division, processing one bit at a time through an 8-bit window. This approach naturally fits the 6502's byte-oriented architecture while maintaining the precision needed for thousands of digits. The divisor is repeatedly halved while the remainder is compared against it, building up the quotient bit by bit.
 
