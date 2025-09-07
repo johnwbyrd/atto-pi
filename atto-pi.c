@@ -422,10 +422,10 @@ void bignum_div_addsub(sign_control_t is_subtract) {
          * but may hurt performance on simple processors like 6502.
          */
         if (remainder == 0 && numerator[i] == 0) {
-            continue;  /* quotient_byte would be 0, nothing to add/subtract */
+            continue; /* quotient_byte would be 0, nothing to add/subtract */
         }
 #endif
-        
+
         /* Build up remainder: shift left 8 bits and add next byte */
         remainder = remainder * 256 + numerator[i];
         quotient_byte_t quotient_byte = 0; /* Quotient byte being constructed */
