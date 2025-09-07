@@ -17,7 +17,7 @@
  * handle the specified order of magnitude without overflow.
  */
 #ifndef MAX_DIGITS_LOG10
-#define MAX_DIGITS_LOG10 6  // Default: up to 10^5 = 100,000 digits
+#define MAX_DIGITS_LOG10 5  // Default: up to 10^5 = 100,000 digits
 #endif
 
 #if MAX_DIGITS_LOG10 > 9
@@ -714,7 +714,7 @@ void deallocate_bignums(void) {
 }
 
 int main(void) {
-    digit_count_t digits = 100;
+    digit_count_t digits = 50000;
     guard_count_t guard = 3;
 
     /* Initialize platform-specific heap expansion */
