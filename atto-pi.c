@@ -43,7 +43,7 @@ typedef uint8_t *bignum;
 
 /* Target and actual digit counts - the fundamental constraint that drives all
  * other requirements. Current: uint16_t allows ~65,535 digits max due to
- * iteration counter limits. Platforms: 8-bit systems practical max ~20,000
+ * iteration counter limits. Platforms: 8-bit systems practical max ~50,000
  * digits (memory), 16-bit+ can use uint32_t for millions.
  */
 #if MAX_DIGITS_LOG10 <= 4
