@@ -1,8 +1,10 @@
-# pi.c
+# atto-pi
 
 Author: John Byrd <johnwbyrd at gmail dot com>
 
-This is a tiny C program for computing pi in small embedded environments.  When compiled using [LLVM-MOS](https://wwww.llvm-mos.org) for the unexpanded Commodore 64 computer, it can generate up to 50k successive digits of pi.
+This is a tiny C program for computing pi in small embedded environments.
+
+When compiled using [LLVM-MOS](https://wwww.llvm-mos.org) for the unexpanded Commodore 64 computer, it can generate up to 50k successive digits of pi.
 
 This program implements [François Bellard's 1997 decimal spigot algorithm for computing pi](https://bellard.org/pi/pi_bin/pi_bin.html), which is a spigot algorithm that generates decimal digits sequentially without storing the entire result. Unlike the more famous [Bailey-Borwein-Plouffe formula](https://observablehq.com/@rreusser/computing-with-the-bailey-borwein-plouffe-formula), this decimal adaptation of Bellard's binary series works in base-1000, producing three decimal digits per iteration rather than hexadecimal digits.
 
