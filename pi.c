@@ -1,9 +1,9 @@
 /*
- * pi.c
+ * pi.c - Bellard's decimal pi spigot algorithm implementation
  *
  * Author: John Byrd <johnwbyrd at gmail dot com>
  *
- * See README.md for details
+ * See README.md for overview of the algorithm and mathematical background
  */
 
 #include <assert.h>
@@ -12,23 +12,24 @@
 #include <stdlib.h>
 
 /*
- * Type definition for arbitrary-precision numbers (bignums).
- * Bignums are byte arrays representing fixed-point numbers in little-endian
- * format, where the fractional part occupies lower indices and the integer
- * part resides at the highest index.
+ * Arbitrary-precision numbers represented as byte arrays in little-endian
+ * format. Lower indices contain fractional part, highest index contains integer
+ * part. Precision window [precision_lower, precision_upper] tracks active
+ * computation range.
  */
 typedef uint8_t *bignum;
 
 /*
- * Custom print functions to replace printf and keep code size small.
- * These avoid the large formatting overhead of printf (~3,000+ bytes)
- * by using only putchar for output, reducing the binary size significantly.
+ * Lightweight printing functions that avoid printf overhead (~3KB+ on 6502).
+ * Critical for fitting within memory constraints of retro systems.
  */
+/* Print null-terminated string character by character. */
 void print_str(const char *s) {
     while (*s)
         putchar(*s++);
 }
 
+/* Print exactly 3 digits with trailing space, used for main digit output. */
 void print_three_digit(uint32_t val) {
     putchar('0' + (val / 100) % 10);
     putchar('0' + (val / 10) % 10);
@@ -36,7 +37,7 @@ void print_three_digit(uint32_t val) {
     putchar(' ');
 }
 
-
+/* Print unsigned integer without leading zeros. */
 void print_uint(uint16_t val) {
     if (val == 0) {
         putchar('0');
@@ -52,6 +53,8 @@ void print_uint(uint16_t val) {
         putchar(buf[i]);
 }
 
+/* Initialize platform-specific optimizations, expanding heap on LLVM-MOS
+ * targets. */
 void init_platform() {
 #ifdef __mos__
     __set_heap_limit(__get_heap_max_safe_size());
@@ -60,50 +63,71 @@ void init_platform() {
 
 /* Global variables for Bellard's pi calculation algorithm.
  * These maintain state across all bignum operations and track the
- * precision boundaries as the calculation progresses.
+ * precision boundaries as the calculation progresses. Understanding
+ * these variables is crucial for comprehending the algorithm's operation.
  */
 
 /* Divisor used in bignum_div_addsub() for each term of Bellard's formula.
- * Ranges from small values (t+1) to large products like (t+9)*256.
+ * Ranges from small values like (10n+1) to large products like (10n+9)*256.
+ * The seven terms use different polynomial denominators:
+ * - Terms with 10n: (10n+1), (10n+3)*4, (10n+5)*64, (10n+7)*64, (10n+9)*256
+ * - Terms with 4n: (4n+1)*8, (4n+3)*256
  * Must be 64-bit to handle the largest denominators without overflow.
+ * At 50,000 digits: largest value ≈ (166,670+9)*256 = 42,669,824
  */
 uint64_t divisor;
 
 /* Lower index bound for active bignum precision window.
  * Represents the leftmost (least significant) byte still containing
- * meaningful fractional data. Increments as precision requirements grow
- * with each iteration, optimizing computation by skipping leading zeros.
+ * meaningful fractional data. As iterations progress, the fractional
+ * precision requirements grow, and this bound increments to skip
+ * computation on bytes that have become insignificant (leading zeros).
+ * Formula: precision_lower = base / 128, where base grows by 159 per iteration.
+ * This optimization significantly reduces computation time in later iterations.
  */
 int16_t precision_lower;
 
 /* Upper index bound for active bignum precision window.
  * Represents the rightmost (most significant) byte containing non-zero
- * numerator data. Decrements as the numerator shrinks through rescaling,
- * reducing unnecessary computation in later iterations.
+ * numerator data. The numerator is rescaled by 250/256 each iteration,
+ * causing it to shrink and making higher-order bytes become zero.
+ * This bound decrements accordingly, reducing unnecessary computation.
+ * The precision window [precision_lower, precision_upper] defines the
+ * active computation range, optimizing performance as the calculation
+ * progresses.
  */
 int16_t precision_upper;
 
 /* Size of each bignum array in bytes, calculated from requested digits.
- * Equals (digits * 0.415241) + guard_digits, providing sufficient binary
- * precision to accurately represent the requested decimal precision.
+ * Formula: (digits * 415241) / 1000000 + guard_digits
+ * The constant 0.415241 = log₂(10)/8, representing bytes needed per decimal
+ * digit. For 50,000 digits: ≈ 20,762 + 3 = 20,765 bytes per bignum. This
+ * provides sufficient binary precision to accurately represent the requested
+ * decimal precision without accumulation errors.
  */
 uint16_t bignum_size;
 
-/* Sum accumulator bignum.
- * Stores the running total of all Bellard formula terms. The integer part
- * (highest byte) contains digits ready for output, while the fractional
- * part accumulates precision for future iterations.
+/* Sum accumulator bignum storing the running total of all Bellard formula
+ * terms. Structure: [fractional_part...][fractional_part][integer_part]
+ * - Integer part (highest byte): Contains 3 digits ready for extraction
+ * - Fractional part (lower bytes): Accumulates precision for future iterations
+ * After each iteration, integer digits are extracted and masked to zero,
+ * then the entire sum is multiplied by 1000 to shift the next 3 digits
+ * from fractional to integer position.
  */
 bignum sum_accumulator;
 
-/* Numerator bignum.
- * Starts at 4 and is rescaled by 250/256 each iteration to maintain the
- * mathematical relationship required by Bellard's formula. Divided by each
- * term's denominator to produce quotients added to sum_accumulator.
+/* Numerator bignum used in division operations for each formula term.
+ * Initialization: Set to 4 (derived from Bellard's series coefficient)
+ * Per-iteration cycle:
+ *   1. Divided by each of the 7 term denominators via bignum_div_addsub()
+ *   2. Rescaled by factor 250/256 to prevent unbounded growth
+ * The 250/256 factor = 1000/1024, compensating for the base-1000 vs base-1024
+ * approximation in the decimal adaptation of Bellard's binary series.
+ * This rescaling maintains the mathematical precision balance between
+ * sum_accumulator and numerator across iterations.
  */
 bignum numerator;
-
-/* Test variable to shift memory layout by 16 bytes to test malloc theory */
 
 /*
  * Bignum arithmetic functions
@@ -156,10 +180,10 @@ void deallocate_bignums(void);
 void calculate_pi_bellard(uint16_t digits, uint8_t guard_digits);
 
 /*
- * Initialize a bignum to a small integer value.
- * Clears the fractional part (low indices) and places the integer value
- * at the high end of the array. This is used to set initial coefficients
- * for the Bellard formula terms.
+ * Initialize a bignum to a small integer value by clearing the fractional
+ * part and placing the integer at the highest position. The integer value
+ * is written as a 32-bit word at the high end, which may span multiple bytes.
+ * This is used to set initial coefficients like 4 for the Bellard formula.
  */
 void bignum_set(bignum bn, uint32_t value) {
     /* Clear fractional portion from precision_lower to bignum_size-1 */
@@ -171,10 +195,19 @@ void bignum_set(bignum bn, uint32_t value) {
 }
 
 /*
- * Core division and accumulation function for Bellard's formula.
- * Divides the numerator bignum by the global divisor D, then adds or subtracts
- * the quotient into the sum bignum. This implements each rational term in the
- * infinite series. Uses binary long division processing 8 bits at a time.
+ * Core division and accumulation function implementing each term of Bellard's
+ * formula. Performs: sum_accumulator ±= (numerator / divisor)
+ *
+ * Algorithm: Binary long division processing 8 bits at a time
+ * 1. For each byte position (most significant to least significant):
+ *    - Build remainder by shifting left 8 bits and adding next numerator byte
+ *    - Scale divisor by 256 to match remainder magnitude
+ *    - Extract quotient bits one by one using comparison and subtraction
+ * 2. Add or subtract resulting quotient byte into sum_accumulator with carry
+ * propagation
+ *
+ * The is_subtract parameter controls whether this term is added or subtracted,
+ * implementing the alternating signs in Bellard's series.
  */
 void bignum_div_addsub(int is_subtract) {
     uint64_t remainder = 0;              /* Running remainder for division */
@@ -200,8 +233,9 @@ void bignum_div_addsub(int is_subtract) {
         /* Add or subtract quotient byte into sum with carry propagation */
         uint16_t sum_idx = i;
         do {
-            int32_t tmp = is_subtract ? (sum_accumulator[sum_idx] - quotient_byte)
-                                      : (sum_accumulator[sum_idx] + quotient_byte);
+            int32_t tmp = is_subtract
+                              ? (sum_accumulator[sum_idx] - quotient_byte)
+                              : (sum_accumulator[sum_idx] + quotient_byte);
             sum_accumulator[sum_idx++] = tmp & 255; /* Store low byte */
             /* Carry/borrow continues if result outside byte range */
             quotient_byte = (tmp >= 0 && tmp <= 255) ? 0 : 1;
@@ -213,9 +247,15 @@ void bignum_div_addsub(int is_subtract) {
 }
 
 /*
- * Rescale bignum by factor 250/256 to prevent numerator growth.
- * First multiplies by 250, then divides by 256 (via byte shift).
- * This maintains precision balance between sum and numerator across iterations.
+ * Rescale bignum by factor 250/256 = 1000/1024 to prevent numerator growth.
+ * This implements the radix correction factor in Bellard's decimal adaptation.
+ *
+ * Two-step process:
+ * 1. Multiply by 250 using carry propagation
+ * 2. Divide by 256 by shifting all bytes down one position (equivalent to >> 8)
+ *
+ * The 250/256 ratio compensates for the approximation 10³ ≈ 2¹⁰ used in
+ * adapting Bellard's binary series for decimal digit extraction.
  */
 void bignum_rescale(bignum bn) {
     bignum_multiply_250(bn); /* Multiply by 250 */
@@ -234,8 +274,8 @@ void bignum_rescale(bignum bn) {
  */
 void bignum_mask_digits(bignum bn) {
     uint16_t i = bignum_size - 1;
-    bn[i] = 0;         /* Clear integer part */
-    bn[i + 1] = 0;     /* Clear extra byte for safety */
+    bn[i] = 0;     /* Clear integer part */
+    bn[i + 1] = 0; /* Clear extra byte for safety */
 }
 
 /*
@@ -251,8 +291,8 @@ void bignum_multiply_250(bignum bn) {
     /* Process from least to most significant byte */
     for (uint16_t i = precision_lower; i <= bignum_size; i++) {
         temp = (uint32_t)bn[i] * 250 + carry;
-        bn[i] = temp & 255;    /* Store low byte */
-        carry = temp >> 8;     /* Propagate high byte as carry */
+        bn[i] = temp & 255; /* Store low byte */
+        carry = temp >> 8;  /* Propagate high byte as carry */
     }
 
     /* Verify no final carry (indicates sufficient precision) */
@@ -274,8 +314,8 @@ void bignum_multiply_1000(bignum bn) {
     /* Process from least to most significant byte */
     for (uint16_t i = precision_lower; i <= bignum_size; i++) {
         temp = (uint32_t)bn[i] * 1000 + carry;
-        bn[i] = temp & 255;    /* Store low byte */
-        carry = temp >> 8;     /* Propagate high byte as carry */
+        bn[i] = temp & 255; /* Store low byte */
+        carry = temp >> 8;  /* Propagate high byte as carry */
     }
 
     /* Verify no final carry (indicates sufficient precision) */
@@ -305,11 +345,16 @@ void calculate_pi_bellard(uint16_t digits, uint8_t guard_digits) {
     /* Initialize numerator to 4 (coefficient from Bellard's formula) */
     bignum_set(numerator, 4);
 
-    /* Initialize loop counters: k=iteration*3, f=iteration*4, t=iteration*10 */
-    uint16_t k = 0; /* Main iteration counter */
-    uint32_t f = 0; /* Secondary counter for f-terms */
-    uint64_t t = 0; /* Tertiary counter for t-terms */
-    uint8_t op = 1; /* Operation toggle: 1=add, 0=subtract */
+    /* Initialize loop counters based on iteration number n:
+     * three_n = 3n (0, 3, 6, 9, 12, ...)
+     * four_n = 4n (0, 4, 8, 12, 16, ...)
+     * ten_n = 10n (0, 10, 20, 30, 40, ...)
+     */
+    uint16_t three_n = 0; /* 3n counter - tracks total digits produced */
+    uint32_t four_n = 0;  /* 4n counter - used in denominators 4n+1, 4n+3 */
+    uint64_t ten_n = 0;   /* 10n counter - used in denominators 10n+1, 10n+3,
+                             10n+5, 10n+7, 10n+9 */
+    uint8_t op = 1;       /* Operation toggle: 1=add, 0=subtract */
 
     /* Initialize sum accumulator to 4 */
     bignum_set(sum_accumulator, 4);
@@ -318,45 +363,48 @@ void calculate_pi_bellard(uint16_t digits, uint8_t guard_digits) {
 
     /* Main calculation loop: each iteration produces 3 digits */
     do {
-        /* Compute the seven terms of Bellard's formula */
-
-        /* Term 1: -2^5/(4n+1) = -32/(t+1)
-         * First term special: skip on k=0 to handle initial value correctly
+        /* Compute the seven terms of Bellard's decimal spigot formula:
+         * Each term has form: coefficient / (polynomial_in_n * scale_factor)
+         * The alternating signs and specific denominators derive from Bellard's
+         * adaptation of his binary BBP formula for decimal digit extraction.
          */
-        divisor = t + 1;
-        if (k > 0) {
+
+        /* Term 1: -32/(10n+1) - but coefficient absorbed into numerator */
+        divisor = ten_n + 1;
+        if (three_n >
+            0) { /* Skip first iteration to avoid double-counting initial 4 */
             bignum_div_addsub(1 - op);
         }
 
-        /* Term 2: -1/(4n+3) = -1/((t+3)*4) */
-        divisor = (t + 3) * 4;
+        /* Term 2: -1/((10n+3)*4) = -1/(4*(10n+3)) */
+        divisor = (ten_n + 3) * 4;
         bignum_div_addsub(op);
 
-        /* Term 3: +2^8/(10n+1) = +256/((t+5)*64) */
-        divisor = (t + 5) * 64;
+        /* Term 3: +256/((10n+5)*64) = +4/(10n+5) */
+        divisor = (ten_n + 5) * 64;
         bignum_div_addsub(op);
 
-        /* Term 4: -2^6/(10n+3) = -64/((t+7)*64) */
-        divisor = (t + 7) * 64;
+        /* Term 4: -64/((10n+7)*64) = -1/(10n+7) */
+        divisor = (ten_n + 7) * 64;
         bignum_div_addsub(op);
 
-        /* Term 5: -2^2/(10n+5) = -4/((t+9)*256) */
-        divisor = (t + 9) * 256;
+        /* Term 5: -4/((10n+9)*256) = -1/(64*(10n+9)) */
+        divisor = (ten_n + 9) * 256;
         bignum_div_addsub(1 - op);
 
-        /* Term 6: -2^2/(10n+7) = -4/((f+1)*8) */
-        divisor = (f + 1) * 8;
+        /* Term 6: -4/((4n+1)*8) = -1/(2*(4n+1)) */
+        divisor = (four_n + 1) * 8;
         bignum_div_addsub(op);
 
-        /* Term 7: +1/(10n+9) = +1/((f+3)*256) */
-        divisor = (f + 3) * 256;
+        /* Term 7: +1/((4n+3)*256) */
+        divisor = (four_n + 3) * 256;
         bignum_div_addsub(op);
 
         /* Extract three digits from sum's integer part */
         uint32_t digit_val = *(uint32_t *)&sum_accumulator[bignum_size - 1];
 
         /* Output digits with appropriate formatting */
-        if (k > 0) {
+        if (three_n > 0) {
             print_three_digit(digit_val);
             digit_counter += 3; /* Each iteration produces 3 digits */
         } else {
@@ -382,12 +430,13 @@ void calculate_pi_bellard(uint16_t digits, uint8_t guard_digits) {
         /* Update loop variables for next iteration.
          * Base grows by 159/128 ≈ 1.2422, empirically determined to match
          * the rate at which precision requirements increase per 3 digits.
+         * Each counter advances by its respective step size.
          */
         base += 159;
         precision_lower = base / 128; /* Convert to byte index */
-        f = f + 4;                    /* Increment f-counter */
-        t = t + 10;                   /* Increment t-counter */
-        k = k + 3;                    /* Increment main counter (3 digits) */
+        four_n += 4;                  /* Advance 4n counter: 0→4→8→12... */
+        ten_n += 10;                  /* Advance 10n counter: 0→10→20→30... */
+        three_n += 3;                 /* Advance 3n counter: 0→3→6→9... */
 
     } while (digit_counter < digits);
 

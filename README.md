@@ -2,11 +2,11 @@
 
 **Author**: John Byrd <johnwbyrd at gmail dot com>
 
-This program implements François Bellard's unpublished 1997 decimal spigot algorithm for computing pi, which is a spigot algorithm that generates decimal digits sequentially without storing the entire result. Unlike the more famous [Bailey-Borwein-Plouffe formula](https://observablehq.com/@rreusser/computing-with-the-bailey-borwein-plouffe-formula), this decimal adaptation of Bellard's binary series works in base-1000, producing three decimal digits per iteration rather than hexadecimal digits.
+This program implements [François Bellard's 1997 decimal spigot algorithm for computing pi](https://bellard.org/pi/pi_bin/pi_bin.html), which is a spigot algorithm that generates decimal digits sequentially without storing the entire result. Unlike the more famous [Bailey-Borwein-Plouffe formula](https://observablehq.com/@rreusser/computing-with-the-bailey-borwein-plouffe-formula), this decimal adaptation of Bellard's binary series works in base-1000, producing three decimal digits per iteration rather than hexadecimal digits.
 
 The mathematical foundation is the infinite series:
 
-$$\pi = \sum_{n=0}^{\infty} \left( \frac{-32}{4n+1} - \frac{1}{4n+3} + \frac{256}{10n+1} - \frac{64}{10n+3} - \frac{4}{10n+5} - \frac{4}{4n+1} + \frac{1}{4n+3} \right) \cdot 2^{-10n-6}$$
+$$\pi = \frac{1}{2^6} \sum_{n=0}^{\infty} \frac{(-1)^n}{2^{10n}} \left[ \frac{-2^5}{4n+1} - \frac{1}{4n+3} + \frac{2^8}{10n+1} - \frac{2^6}{10n+3} - \frac{2^2}{10n+5} - \frac{2^2}{10n+7} + \frac{1}{10n+9} \right]$$
 
 Each iteration evaluates seven rational terms, alternating between addition and subtraction. The denominators grow as functions of the iteration counter, requiring arbitrary-precision division to maintain accuracy across thousands of digits.
 
