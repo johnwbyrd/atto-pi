@@ -416,6 +416,16 @@ void bignum_div_addsub(sign_control_t is_subtract) {
 
     /* Process bignum from most significant to least significant byte */
     for (array_index_t i = precision_upper; i >= precision_lower; i--) {
+#ifdef BRANCH_PREDICTING_CPU
+        /* Skip byte entirely if no contribution possible.
+         * This optimization helps on modern CPUs with branch prediction
+         * but may hurt performance on simple processors like 6502.
+         */
+        if (remainder == 0 && numerator[i] == 0) {
+            continue;  /* quotient_byte would be 0, nothing to add/subtract */
+        }
+#endif
+        
         /* Build up remainder: shift left 8 bits and add next byte */
         remainder = remainder * 256 + numerator[i];
         quotient_byte_t quotient_byte = 0; /* Quotient byte being constructed */
@@ -715,7 +725,7 @@ void deallocate_bignums(void) {
 }
 
 int main(void) {
-    digit_count_t digits = 50000;
+    digit_count_t digits = 1000;
     guard_count_t guard = 3;
 
     /* Initialize platform-specific heap expansion */
