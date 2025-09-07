@@ -17,7 +17,7 @@
  * handle the specified order of magnitude without overflow.
  */
 #ifndef MAX_DIGITS_LOG10
-#define MAX_DIGITS_LOG10 5  // Default: up to 10^5 = 100,000 digits
+#define MAX_DIGITS_LOG10 5 // Default: up to 10^5 = 100,000 digits
 #endif
 
 #if MAX_DIGITS_LOG10 > 9
@@ -47,11 +47,11 @@ typedef uint8_t *bignum;
  * digits (memory), 16-bit+ can use uint32_t for millions.
  */
 #if MAX_DIGITS_LOG10 <= 4
-  typedef uint16_t digit_count_t;
+typedef uint16_t digit_count_t;
 #elif MAX_DIGITS_LOG10 <= 9
-  typedef uint32_t digit_count_t;
+typedef uint32_t digit_count_t;
 #else
-  typedef uint64_t digit_count_t;
+typedef uint64_t digit_count_t;
 #endif
 
 /* 3-digit output progression counter (0,3,6,9,12...) tracking total digits
@@ -60,11 +60,11 @@ typedef uint8_t *bignum;
  * limits.
  */
 #if MAX_DIGITS_LOG10 <= 4
-  typedef uint16_t digit_progression_t;
+typedef uint16_t digit_progression_t;
 #elif MAX_DIGITS_LOG10 <= 9
-  typedef uint32_t digit_progression_t;
+typedef uint32_t digit_progression_t;
 #else
-  typedef uint64_t digit_progression_t;
+typedef uint64_t digit_progression_t;
 #endif
 
 /* Individual 3-digit output values extracted from bignum integer part.
@@ -81,9 +81,9 @@ typedef uint32_t digit_value_t;
  * Current: uint32_t handles all realistic digit counts.
  */
 #if MAX_DIGITS_LOG10 <= 6
-  typedef uint32_t iter_4n_t;
+typedef uint32_t iter_4n_t;
 #else
-  typedef uint64_t iter_4n_t;
+typedef uint64_t iter_4n_t;
 #endif
 
 /* 10n iteration counter for denominators (10n+1), (10n+3), (10n+5), (10n+7),
@@ -102,11 +102,11 @@ typedef uint64_t iter_10n_t;
  * bugs on 16-bit systems.
  */
 #if MAX_DIGITS_LOG10 <= 4
-  typedef int16_t precision_bound_t;
+typedef int16_t precision_bound_t;
 #elif MAX_DIGITS_LOG10 <= 9
-  typedef int32_t precision_bound_t;
+typedef int32_t precision_bound_t;
 #else
-  typedef int64_t precision_bound_t;
+typedef int64_t precision_bound_t;
 #endif
 
 /* Fixed-point precision tracker (scaled by 128 for integer math).
@@ -115,9 +115,9 @@ typedef uint64_t iter_10n_t;
  * Current: int32_t handles growth rate across all practical digit counts.
  */
 #if MAX_DIGITS_LOG10 <= 7
-  typedef int32_t precision_base_t;
+typedef int32_t precision_base_t;
 #else
-  typedef int64_t precision_base_t;
+typedef int64_t precision_base_t;
 #endif
 
 /* Guard digits for computational headroom preventing accumulation errors.
@@ -134,11 +134,11 @@ typedef uint8_t guard_count_t;
  * Current: uint16_t limits to 65,535 bytes - use uint32_t for larger scales.
  */
 #if MAX_DIGITS_LOG10 <= 4
-  typedef uint16_t array_size_t;
+typedef uint16_t array_size_t;
 #elif MAX_DIGITS_LOG10 <= 9
-  typedef uint32_t array_size_t;
+typedef uint32_t array_size_t;
 #else
-  typedef uint64_t array_size_t;
+typedef uint64_t array_size_t;
 #endif
 
 /* Array indices for bignum operations.
@@ -146,11 +146,11 @@ typedef uint8_t guard_count_t;
  * Current: int16_t matches precision_bound_t for consistency.
  */
 #if MAX_DIGITS_LOG10 <= 4
-  typedef int16_t array_index_t;
+typedef int16_t array_index_t;
 #elif MAX_DIGITS_LOG10 <= 9
-  typedef int32_t array_index_t;
+typedef int32_t array_index_t;
 #else
-  typedef int64_t array_index_t;
+typedef int64_t array_index_t;
 #endif
 
 /* - Division engine arithmetic */
@@ -243,7 +243,8 @@ void print_uint(digit_count_t val) {
         putchar('0');
         return;
     }
-    char buf[12];  // Enough for uint32_t max (4,294,967,295 = 10 digits) + safety
+    char
+        buf[12]; // Enough for uint32_t max (4,294,967,295 = 10 digits) + safety
     int i = 0;
     do {
         buf[i++] = '0' + (val % 10);
@@ -273,7 +274,7 @@ void init_platform() {
  * - Terms with 10n: (10n+1), (10n+3)*4, (10n+5)*64, (10n+7)*64, (10n+9)*256
  * - Terms with 4n: (4n+1)*8, (4n+3)*256
  * Must be 64-bit to handle the largest denominators without overflow.
- * At 50,000 digits: largest value ≈ (166,670+9)*256 = 42,669,824
+ * At 50,000 digits: largest value ~= (166,670+9)*256 = 42,669,824
  */
 divisor_t divisor;
 
@@ -300,8 +301,8 @@ precision_bound_t precision_upper;
 
 /* Size of each bignum array in bytes, calculated from requested digits.
  * Formula: (digits * 415241) / 1000000 + guard_digits
- * The constant 0.415241 = log₂(10)/8, representing bytes needed per decimal
- * digit. For 50,000 digits: ≈ 20,762 + 3 = 20,765 bytes per bignum. This
+ * The constant 0.415241 = log_2(10)/8, representing bytes needed per decimal
+ * digit. For 50,000 digits: ~= 20,762 + 3 = 20,765 bytes per bignum. This
  * provides sufficient binary precision to accurately represent the requested
  * decimal precision without accumulation errors.
  */
@@ -396,7 +397,7 @@ void bignum_set(bignum bn, bignum_init_value_t value) {
 
 /*
  * Core division and accumulation function implementing each term of Bellard's
- * formula. Performs: sum_accumulator ±= (numerator / divisor)
+ * formula. Performs: sum_accumulator +/- = (numerator / divisor)
  *
  * Algorithm: Binary long division processing 8 bits at a time
  * 1. For each byte position (most significant to least significant):
@@ -454,7 +455,7 @@ void bignum_div_addsub(sign_control_t is_subtract) {
  * 1. Multiply by 250 using carry propagation
  * 2. Divide by 256 by shifting all bytes down one position (equivalent to >> 8)
  *
- * The 250/256 ratio compensates for the approximation 10³ ≈ 2¹⁰ used in
+ * The 250/256 ratio compensates for the approximation 10^3 ~= 2^10 used in
  * adapting Bellard's binary series for decimal digit extraction.
  */
 void bignum_rescale(bignum bn) {
@@ -630,15 +631,15 @@ void calculate_pi(digit_count_t digits, guard_count_t guard_digits) {
         }
 
         /* Update loop variables for next iteration.
-         * Base grows by 159/128 ≈ 1.2422, empirically determined to match
+         * Base grows by 159/128 ~= 1.2422, empirically determined to match
          * the rate at which precision requirements increase per 3 digits.
          * Each counter advances by its respective step size.
          */
         base += 159;
         precision_lower = base / 128; /* Convert to byte index */
-        four_n += 4;                  /* Advance 4n counter: 0→4→8→12... */
-        ten_n += 10;                  /* Advance 10n counter: 0→10→20→30... */
-        three_n += 3;                 /* Advance 3n counter: 0→3→6→9... */
+        four_n += 4;                  /* Advance 4n counter: 0->4->8->12... */
+        ten_n += 10;  /* Advance 10n counter: 0->10->20->30... */
+        three_n += 3; /* Advance 3n counter: 0->3->6->9... */
 
     } while (digit_counter < digits);
 
