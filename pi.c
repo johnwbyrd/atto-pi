@@ -12,6 +12,19 @@
 #include <stdlib.h>
 
 /*
+ * Precision scaling system: MAX_DIGITS_LOG10 determines maximum supported
+ * digit count as 10^MAX_DIGITS_LOG10. Types are automatically selected to
+ * handle the specified order of magnitude without overflow.
+ */
+#ifndef MAX_DIGITS_LOG10
+#define MAX_DIGITS_LOG10 6  // Default: up to 10^5 = 100,000 digits
+#endif
+
+#if MAX_DIGITS_LOG10 > 9
+#error "MAX_DIGITS_LOG10 > 9 (billion digits) requires 128-bit integer support"
+#endif
+
+/*
  * Arbitrary-precision numbers represented as byte arrays in little-endian
  * format. Lower indices contain fractional part, highest index contains integer
  * part. Precision window [precision_lower, precision_upper] tracks active
@@ -33,14 +46,26 @@ typedef uint8_t *bignum;
  * iteration counter limits. Platforms: 8-bit systems practical max ~20,000
  * digits (memory), 16-bit+ can use uint32_t for millions.
  */
-typedef uint16_t digit_count_t;
+#if MAX_DIGITS_LOG10 <= 4
+  typedef uint16_t digit_count_t;
+#elif MAX_DIGITS_LOG10 <= 9
+  typedef uint32_t digit_count_t;
+#else
+  typedef uint64_t digit_count_t;
+#endif
 
 /* 3-digit output progression counter (0,3,6,9,12...) tracking total digits
  * produced. Range: 0 to (digit_count_t * 3). Must handle digit_count * 3
  * without overflow. Current: uint16_t sufficient for current digit_count_t
  * limits.
  */
-typedef uint16_t digit_progression_t;
+#if MAX_DIGITS_LOG10 <= 4
+  typedef uint16_t digit_progression_t;
+#elif MAX_DIGITS_LOG10 <= 9
+  typedef uint32_t digit_progression_t;
+#else
+  typedef uint64_t digit_progression_t;
+#endif
 
 /* Individual 3-digit output values extracted from bignum integer part.
  * Range: 0-999 (three decimal digits). Only needs to hold 10-bit values.
@@ -55,7 +80,11 @@ typedef uint32_t digit_value_t;
  * Used in expressions: (4n+1)*8, (4n+3)*256.
  * Current: uint32_t handles all realistic digit counts.
  */
-typedef uint32_t iter_4n_t;
+#if MAX_DIGITS_LOG10 <= 6
+  typedef uint32_t iter_4n_t;
+#else
+  typedef uint64_t iter_4n_t;
+#endif
 
 /* 10n iteration counter for denominators (10n+1), (10n+3), (10n+5), (10n+7),
  * (10n+9). Range: 0 to (digit_count * 10/3), steps of 10. At 50,000 digits: max
@@ -72,14 +101,24 @@ typedef uint64_t iter_10n_t;
  * shrinks as numerator rescales. Current: int16_t signed to prevent comparison
  * bugs on 16-bit systems.
  */
-typedef int16_t precision_bound_t;
+#if MAX_DIGITS_LOG10 <= 4
+  typedef int16_t precision_bound_t;
+#elif MAX_DIGITS_LOG10 <= 9
+  typedef int32_t precision_bound_t;
+#else
+  typedef int64_t precision_bound_t;
+#endif
 
 /* Fixed-point precision tracker (scaled by 128 for integer math).
  * Range: 0 to ~(digit_count * 159). Growth: +159 per iteration.
  * Formula: precision_lower = precision_base / 128.
  * Current: int32_t handles growth rate across all practical digit counts.
  */
-typedef int32_t precision_base_t;
+#if MAX_DIGITS_LOG10 <= 7
+  typedef int32_t precision_base_t;
+#else
+  typedef int64_t precision_base_t;
+#endif
 
 /* Guard digits for computational headroom preventing accumulation errors.
  * Range: typically 3-10. More guard digits = more memory but safer computation.
@@ -94,13 +133,25 @@ typedef uint8_t guard_count_t;
  * Range: ~418 bytes at 1K digits to ~20,765 bytes at 50K digits.
  * Current: uint16_t limits to 65,535 bytes - use uint32_t for larger scales.
  */
-typedef uint16_t array_size_t;
+#if MAX_DIGITS_LOG10 <= 4
+  typedef uint16_t array_size_t;
+#elif MAX_DIGITS_LOG10 <= 9
+  typedef uint32_t array_size_t;
+#else
+  typedef uint64_t array_size_t;
+#endif
 
 /* Array indices for bignum operations.
  * Range: 0 to array_size_t-1. Signed prevents index comparison bugs.
  * Current: int16_t matches precision_bound_t for consistency.
  */
-typedef int16_t array_index_t;
+#if MAX_DIGITS_LOG10 <= 4
+  typedef int16_t array_index_t;
+#elif MAX_DIGITS_LOG10 <= 9
+  typedef int32_t array_index_t;
+#else
+  typedef int64_t array_index_t;
+#endif
 
 /* - Division engine arithmetic */
 
@@ -192,7 +243,7 @@ void print_uint(digit_count_t val) {
         putchar('0');
         return;
     }
-    char buf[6];
+    char buf[12];  // Enough for uint32_t max (4,294,967,295 = 10 digits) + safety
     int i = 0;
     do {
         buf[i++] = '0' + (val % 10);
@@ -326,7 +377,7 @@ void deallocate_bignums(void);
  */
 
 /* Execute Bellard's formula to calculate pi to the specified precision */
-void calculate_pi_bellard(digit_count_t digits, guard_count_t guard_digits);
+void calculate_pi(digit_count_t digits, guard_count_t guard_digits);
 
 /*
  * Initialize a bignum to a small integer value by clearing the fractional
@@ -478,7 +529,7 @@ void bignum_multiply_1000(bignum bn) {
  * Generates digits using a spigot algorithm that produces three decimal
  * digits per iteration through an alternating series of rational terms.
  */
-void calculate_pi_bellard(digit_count_t digits, guard_count_t guard_digits) {
+void calculate_pi(digit_count_t digits, guard_count_t guard_digits) {
     /* Initialize memory and precision tracking */
     bignum_size = calculate_bignum_size(digits, guard_digits);
     allocate_bignums(bignum_size);
@@ -663,7 +714,7 @@ void deallocate_bignums(void) {
 }
 
 int main(void) {
-    digit_count_t digits = 50000;
+    digit_count_t digits = 100;
     guard_count_t guard = 3;
 
     /* Initialize platform-specific heap expansion */
@@ -672,7 +723,7 @@ int main(void) {
     print_str("Calculating pi to ");
     print_uint(digits);
     print_str("+ digits...\n");
-    calculate_pi_bellard(digits, guard);
+    calculate_pi(digits, guard);
 
     return 0;
 }
