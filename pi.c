@@ -11,9 +11,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifdef __llvm_mos__
+#ifdef __mos__
 extern char __heap_start;
+extern char __stack;
 #endif
+
+/*
+ * Type definition for arbitrary-precision numbers (bignums).
+ * Bignums are byte arrays representing fixed-point numbers in little-endian
+ * format, where the fractional part occupies lower indices and the integer
+ * part resides at the highest index.
+ */
+typedef uint8_t *bignum;
 
 /*
  * Custom print functions to replace printf and keep code size small.
@@ -32,6 +41,7 @@ void print_three_digit(uint32_t val) {
     putchar(' ');
 }
 
+
 void print_uint(uint16_t val) {
     if (val == 0) {
         putchar('0');
@@ -47,13 +57,11 @@ void print_uint(uint16_t val) {
         putchar(buf[i]);
 }
 
-#ifdef __llvm_mos__
-/* Maximum heap for C64 with BASIC unmapped:
- * Stack at $D000, heap starts after program (~$1CE2).
- * Available: ~44KB. Using 42KB to leave 2KB for stack.
- */
-size_t __heap_default_limit = 42 * 1024;
+void init_platform() {
+#ifdef __mos__
+    __set_heap_limit(__get_heap_max_safe_size());
 #endif
+}
 
 /* Global variables for Bellard's pi calculation algorithm.
  * These maintain state across all bignum operations and track the
@@ -86,19 +94,21 @@ int16_t precision_upper;
  */
 uint16_t bignum_size;
 
-/* Pointer to the sum accumulator bignum.
+/* Sum accumulator bignum.
  * Stores the running total of all Bellard formula terms. The integer part
  * (highest byte) contains digits ready for output, while the fractional
  * part accumulates precision for future iterations.
  */
-uint8_t *sum_accumulator;
+bignum sum_accumulator;
 
-/* Pointer to the numerator bignum.
+/* Numerator bignum.
  * Starts at 4 and is rescaled by 250/256 each iteration to maintain the
  * mathematical relationship required by Bellard's formula. Divided by each
  * term's denominator to produce quotients added to sum_accumulator.
  */
-uint8_t *numerator;
+bignum numerator;
+
+/* Test variable to shift memory layout by 16 bytes to test malloc theory */
 
 /*
  * Bignum arithmetic functions
@@ -107,7 +117,7 @@ uint8_t *numerator;
  */
 
 /* Initialize a bignum to a small integer value, clearing the fractional part */
-void bignum_set(uint8_t *bignum, uint32_t value);
+void bignum_set(bignum bn, uint32_t value);
 
 /* Perform division and add or subtract the quotient into the sum bignum.
  * This implements the core mathematical operation for each term in Bellard's
@@ -116,18 +126,18 @@ void bignum_div_addsub(int is_subtract);
 
 /* Rescale a bignum by the factor 250/256, used to prevent numerator overflow
  * while maintaining precision across iterations */
-void bignum_rescale(uint8_t *bignum);
+void bignum_rescale(bignum bn);
 
 /* Zero the integer part of a bignum, removing digits that have been output */
-void bignum_mask_digits(uint8_t *bignum);
+void bignum_mask_digits(bignum bn);
 
 /* Multiply a bignum by 250 with carry propagation.
  * Part of the rescaling operation (250/256 ratio) */
-void bignum_multiply_250(uint8_t *bignum);
+void bignum_multiply_250(bignum bn);
 
 /* Multiply a bignum by 1000 with carry propagation.
  * Shifts the next three decimal digits into the integer position */
-void bignum_multiply_1000(uint8_t *bignum);
+void bignum_multiply_1000(bignum bn);
 
 /*
  * Memory management functions
@@ -156,13 +166,13 @@ void calculate_pi_bellard(uint16_t digits, uint8_t guard_digits);
  * at the high end of the array. This is used to set initial coefficients
  * for the Bellard formula terms.
  */
-void bignum_set(uint8_t *bignum, uint32_t value) {
+void bignum_set(bignum bn, uint32_t value) {
     /* Clear fractional portion from precision_lower to bignum_size-1 */
     for (uint16_t i = precision_lower; i < bignum_size; i++) {
-        *(bignum + i) = 0;
+        bn[i] = 0;
     }
     /* Place integer value at highest position (32-bit write) */
-    *(uint32_t *)(bignum + bignum_size - 1) = value;
+    *(uint32_t *)(bn + bignum_size - 1) = value;
 }
 
 /*
@@ -212,13 +222,13 @@ void bignum_div_addsub(int is_subtract) {
  * First multiplies by 250, then divides by 256 (via byte shift).
  * This maintains precision balance between sum and numerator across iterations.
  */
-void bignum_rescale(uint8_t *bignum) {
-    bignum_multiply_250(bignum); /* Multiply by 250 */
+void bignum_rescale(bignum bn) {
+    bignum_multiply_250(bn); /* Multiply by 250 */
     /* Divide by 256: shift all bytes down one position */
     for (uint16_t i = precision_lower; i < bignum_size; i++) {
-        *(bignum + i) = *(bignum + i + 1);
+        *(bn + i) = *(bn + i + 1);
     }
-    *(bignum + bignum_size) = 0; /* Clear vacated high byte */
+    *(bn + bignum_size) = 0; /* Clear vacated high byte */
 }
 
 /*
@@ -227,10 +237,10 @@ void bignum_rescale(uint8_t *bignum) {
  * fractional part for the next iteration. Clears both the integer
  * byte and one extra byte for safety.
  */
-void bignum_mask_digits(uint8_t *bignum) {
+void bignum_mask_digits(bignum bn) {
     uint16_t i = bignum_size - 1;
-    *(bignum + i) = 0;     /* Clear integer part */
-    *(bignum + i + 1) = 0; /* Clear extra byte for safety */
+    *(bn + i) = 0;     /* Clear integer part */
+    *(bn + i + 1) = 0; /* Clear extra byte for safety */
 }
 
 /*
@@ -239,14 +249,14 @@ void bignum_mask_digits(uint8_t *bignum) {
  * by 250, with carries propagated to higher bytes. The final carry must
  * be zero to ensure no precision loss (guaranteed by proper sizing).
  */
-void bignum_multiply_250(uint8_t *bignum) {
+void bignum_multiply_250(bignum bn) {
     uint32_t temp;
     uint32_t carry = 0;
 
     /* Process from least to most significant byte */
     for (uint16_t i = precision_lower; i <= bignum_size; i++) {
-        temp = (uint32_t)(*(bignum + i)) * 250 + carry;
-        *(bignum + i) = temp & 255; /* Store low byte */
+        temp = (uint32_t)(*(bn + i)) * 250 + carry;
+        *(bn + i) = temp & 255; /* Store low byte */
         carry = temp >> 8;          /* Propagate high byte as carry */
     }
 
@@ -262,14 +272,14 @@ void bignum_multiply_250(uint8_t *bignum) {
  * the next three digits from the fractional part into the integer part for
  * the following iteration. Uses carry propagation like multiply_250.
  */
-void bignum_multiply_1000(uint8_t *bignum) {
+void bignum_multiply_1000(bignum bn) {
     uint32_t temp;
     uint32_t carry = 0;
 
     /* Process from least to most significant byte */
     for (uint16_t i = precision_lower; i <= bignum_size; i++) {
-        temp = (uint32_t)(*(bignum + i)) * 1000 + carry;
-        *(bignum + i) = temp & 255; /* Store low byte */
+        temp = (uint32_t)(*(bn + i)) * 1000 + carry;
+        *(bn + i) = temp & 255; /* Store low byte */
         carry = temp >> 8;          /* Propagate high byte as carry */
     }
 
@@ -425,7 +435,7 @@ void allocate_bignums(uint16_t size) {
     const uint16_t pad = 4; /* Padding for safe 32-bit reads */
 
     /* Allocate sum accumulator with error checking */
-    sum_accumulator = (uint8_t *)malloc(size + pad);
+    sum_accumulator = (bignum)malloc(size + pad);
     if (!sum_accumulator) {
         print_str("Error: Failed to alloc sum_accumulator: ");
         print_uint(size + pad);
@@ -433,7 +443,7 @@ void allocate_bignums(uint16_t size) {
     }
 
     /* Allocate numerator with error checking */
-    numerator = (uint8_t *)malloc(size + pad);
+    numerator = (bignum)malloc(size + pad);
     if (!numerator) {
         print_str("Failed to alloc numerator: ");
         print_uint(size + pad);
@@ -458,8 +468,11 @@ void deallocate_bignums(void) {
 }
 
 int main(void) {
-    uint16_t digits = 25000;
+    uint16_t digits = 1000;
     uint8_t guard = 3;
+
+    /* Initialize platform-specific heap expansion */
+    init_platform();
 
     print_str("Calculating pi to ");
     print_uint(digits);
