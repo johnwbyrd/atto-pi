@@ -447,9 +447,9 @@ void bignum_div_addsub(sign_control_t is_subtract) {
             signed_arith_t tmp =
                 is_subtract ? (sum_accumulator[sum_idx] - quotient_byte)
                             : (sum_accumulator[sum_idx] + quotient_byte);
-            sum_accumulator[sum_idx++] = tmp & 255; /* Store low byte */
+            sum_accumulator[sum_idx++] = tmp & 0xff; /* Store low byte */
             /* Carry/borrow continues if result outside byte range */
-            quotient_byte = (tmp >= 0 && tmp <= 255) ? 0 : 1;
+            quotient_byte = (tmp >= 0 && tmp <= 0xff) ? 0 : 1;
         } while (quotient_byte);
     }
 
@@ -502,7 +502,7 @@ void bignum_multiply_250(bignum bn) {
     /* Process from least to most significant byte */
     for (array_index_t i = precision_lower; i <= bignum_size; i++) {
         temp = (temp_arith_t)bn[i] * 250 + carry;
-        bn[i] = temp & 255; /* Store low byte */
+        bn[i] = temp & 0xff; /* Store low byte */
         carry = temp >> 8;  /* Propagate high byte as carry */
     }
 
@@ -525,7 +525,7 @@ void bignum_multiply_1000(bignum bn) {
     /* Process from least to most significant byte */
     for (array_index_t i = precision_lower; i <= bignum_size; i++) {
         temp = (temp_arith_t)bn[i] * 1000 + carry;
-        bn[i] = temp & 255; /* Store low byte */
+        bn[i] = temp & 0xff; /* Store low byte */
         carry = temp >> 8;  /* Propagate high byte as carry */
     }
 
