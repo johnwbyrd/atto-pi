@@ -34,7 +34,7 @@ The numerator bignum undergoes rescaling through multiplication by $\frac{250}{2
 
 ## Precision and limits
 
-Practical calculation of pi all about limits. It necessary to track types exactly in order to make sure that C integer overflow does not occur for the digits of pi requested. To this end, every integer type in this program is abstracted.
+Practical calculation of pi all about limits. It is necessary to track types exactly in order to make sure that C integer overflow does not occur for the digits of pi requested. To this end, every integer type in this program is abstracted semantically.
 
 The algorithm produces three decimal digits per iteration, with the first iteration yielding just the initial digit 3 followed by the decimal point. Each subsequent iteration contributes three more digits to pi's expansion. The performance characteristics vary dramatically across different digit counts - computing 100 digits runs relatively quickly, 1000 digits requires noticeable time, while 10,000 digits on period hardware like a Commodore 64 can take hours due to the quadratic scaling of the arithmetic operations.
 
