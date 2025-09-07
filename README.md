@@ -1,6 +1,6 @@
 # pi.c
 
-**Author**: John Byrd <johnwbyrd at gmail dot com>
+Author: John Byrd <johnwbyrd at gmail dot com>
 
 This program implements [François Bellard's 1997 decimal spigot algorithm for computing pi](https://bellard.org/pi/pi_bin/pi_bin.html), which is a spigot algorithm that generates decimal digits sequentially without storing the entire result. Unlike the more famous [Bailey-Borwein-Plouffe formula](https://observablehq.com/@rreusser/computing-with-the-bailey-borwein-plouffe-formula), this decimal adaptation of Bellard's binary series works in base-1000, producing three decimal digits per iteration rather than hexadecimal digits.
 
@@ -32,26 +32,12 @@ The numerator bignum undergoes rescaling through multiplication by $\frac{250}{2
 
 ## Precision and limits
 
-This algorithm runs relatively soonish, if 100 digits are requested. It can do 1000, if you're prepared to wait a while. And it can generate 10000 digits of pi on a Commodore 64, but don't expect that result anytime soon, because it seems to require several minutes to generate even 3 digits from that spigot.
+Practical calculation of pi all about limits. It necessary to track types exactly in order to make sure that C integer overflow does not occur for the digits of pi requested. To this end, every integer type in this program is abstracted.
 
-The implementation's maximum capacity stems from the integer types chosen for loop counters. The main iteration counter $k$ uses `uint16_t` and increments by 3 each cycle. This creates a hard limit around 65,532 digits, beyond which $k$ would overflow and wrap to a small positive number, causing an infinite loop when compared against the target digit count.
+The algorithm produces three decimal digits per iteration, with the first iteration yielding just the initial digit 3 followed by the decimal point. Each subsequent iteration contributes three more digits to pi's expansion. The performance characteristics vary dramatically across different digit counts - computing 100 digits runs relatively quickly, 1000 digits requires noticeable time, while 10,000 digits on period hardware like a Commodore 64 can take hours due to the quadratic scaling of the arithmetic operations.
 
-The secondary counters $f$ and $t$ use larger types to handle their respective computational demands. Variable $f$ employs `uint32_t` because it appears in expressions like $(f+3) \times 256$, which would overflow `uint16_t` after just a few dozen iterations. At the maximum digit count, $f$ reaches approximately 87,376, and its largest computation $(87,379) \times 256$ produces 22,369,024, which fits comfortably within `uint32_t`'s range.
+The fundamental limit comes from the `digit_progression_t` type used to track the number of digits produced. Currently defined as `uint16_t`, the variable `three_n` increments by 3 each iteration and serves as the loop control. Since it must remain less than the requested digit count to continue, and since `uint16_t` has a maximum value of 65,535, the practical limit sits just below this threshold. Requesting more than 65,532 digits would cause `three_n` to overflow and wrap around, creating an infinite loop.
 
-Variable $t$ uses `uint64_t` due to its appearance in multiple denominator calculations. While $t$ itself grows relatively slowly (reaching about 218,440 at maximum digits), the safety margin provided by 64-bit arithmetic prevents any possibility of overflow in the various expressions involving $t$.
+The iteration counters `four_n` and `ten_n` track the progression through Bellard's formula terms. The variable `four_n` advances by 4 each iteration and uses `uint32_t` to handle expressions like `(four_n + 3) * 256`. At the maximum digit count, `four_n` reaches approximately 87,376, and its largest computation yields about 22.4 million, well within `uint32_t`'s range. Similarly, `ten_n` advances by 10 per iteration and employs `uint64_t` because it appears in expressions like `(ten_n + 9) * 256`. At maximum digits, this reaches about 42.7 million, requiring the wider type to prevent overflow.
 
-Memory requirements scale linearly with the requested digit count. For 1000 digits, each bignum requires approximately 417 bytes, totaling 834 bytes for both the accumulator and numerator. At the theoretical maximum of 65,532 digits, this grows to about 54,610 bytes total, which approaches but remains within the 6502's addressing capacity.
-
-## Architectural considerations
-
-Several design choices specifically accommodate the 6502's limitations and characteristics. The use of signed `int16_t` for array indices $L$ and $M$ prevents subtle bugs that arise from comparing signed loop counters with unsigned array bounds on 16-bit systems. The little-endian byte ordering matches the 6502's native format, simplifying multi-byte operations.
-
-Memory allocation includes padding beyond the computed bignum size to ensure safe 32-bit read operations when extracting output digits. This prevents potential crashes from reading beyond allocated memory boundaries, a critical consideration on systems without memory protection.
-
-The spigot nature of Bellard's algorithm proves particularly well-suited to resource-constrained systems like the 6502. Rather than computing and storing all digits before output, each digit can be displayed as soon as it's calculated, allowing the computation of arbitrarily long pi expansions without proportional memory growth for the output itself.
-
-## Scaling operations in the algorithm
-
-Two specific multiplication operations are central to the algorithm's operation and deserve explanation. The multiply-by-1000 operation extracts output digits by shifting the fractional part of the accumulator into the integer position. Since we extract three decimal digits per iteration, multiplying by 1000 moves the next group of three digits from the fractional part into the integer part where they can be read and output.
-
-The multiply-by-250 operation implements the rescaling factor $\frac{250}{256}$ that maintains precision balance between iterations. This ratio equals approximately 0.9765625, which slightly reduces the numerator each cycle to prevent unlimited growth. The division by 256 is implemented as a byte shift (moving all bytes down one position), making $\frac{250}{256}$ an efficient way to implement the mathematically required scaling factor. This rescaling prevents the numerator from growing without bound while maintaining sufficient precision for accurate digit extraction.
+Memory consumption follows a predictable linear relationship with the requested digit count. Each bignum requires approximately 0.415241 bytes per decimal digit plus a small guard factor for computational headroom. For 1,000 digits, each bignum occupies roughly 418 bytes, totaling 836 bytes for both the accumulator and numerator. At 10,000 digits, this grows to about 4,155 bytes per bignum. The theoretical maximum of 65,532 digits would require approximately 27,220 bytes per bignum, or 54,440 bytes total, which fits within the 64KB addressing space of 8-bit systems but leaves little room for stack and program code.

@@ -22,20 +22,23 @@ typedef uint8_t *bignum;
 /*
  * Semantic type system based on algorithmic purpose rather than bit width.
  * Types are defined by their mathematical role in Bellard's algorithm,
- * allowing implementers to understand constraints and optimize for their platform.
+ * allowing implementers to understand constraints and optimize for their
+ * platform.
  */
 
 /* - Digit specification and output */
 
-/* Target and actual digit counts - the fundamental constraint that drives all other requirements.
- * Current: uint16_t allows ~65,535 digits max due to iteration counter limits.
- * Platforms: 8-bit systems practical max ~20,000 digits (memory), 16-bit+ can use uint32_t for millions.
+/* Target and actual digit counts - the fundamental constraint that drives all
+ * other requirements. Current: uint16_t allows ~65,535 digits max due to
+ * iteration counter limits. Platforms: 8-bit systems practical max ~20,000
+ * digits (memory), 16-bit+ can use uint32_t for millions.
  */
 typedef uint16_t digit_count_t;
 
-/* 3-digit output progression counter (0,3,6,9,12...) tracking total digits produced.
- * Range: 0 to (digit_count_t * 3). Must handle digit_count * 3 without overflow.
- * Current: uint16_t sufficient for current digit_count_t limits.
+/* 3-digit output progression counter (0,3,6,9,12...) tracking total digits
+ * produced. Range: 0 to (digit_count_t * 3). Must handle digit_count * 3
+ * without overflow. Current: uint16_t sufficient for current digit_count_t
+ * limits.
  */
 typedef uint16_t digit_progression_t;
 
@@ -54,19 +57,20 @@ typedef uint32_t digit_value_t;
  */
 typedef uint32_t iter_4n_t;
 
-/* 10n iteration counter for denominators (10n+1), (10n+3), (10n+5), (10n+7), (10n+9).
- * Range: 0 to (digit_count * 10/3), steps of 10. At 50,000 digits: max ~166,660.
- * Used in largest expression: (10n+9)*256 = ~42.7M at max digits.
+/* 10n iteration counter for denominators (10n+1), (10n+3), (10n+5), (10n+7),
+ * (10n+9). Range: 0 to (digit_count * 10/3), steps of 10. At 50,000 digits: max
+ * ~166,660. Used in largest expression: (10n+9)*256 = ~42.7M at max digits.
  * Current: uint64_t prevents overflow in all denominator calculations.
  */
 typedef uint64_t iter_10n_t;
 
 /* - Precision window management */
 
-/* Precision window bounds [precision_lower, precision_upper] for bignum optimization.
- * Range: 0 to bignum_size-1, but can be negative during comparisons.
- * precision_lower: grows ~1.24x per iteration. precision_upper: shrinks as numerator rescales.
- * Current: int16_t signed to prevent comparison bugs on 16-bit systems.
+/* Precision window bounds [precision_lower, precision_upper] for bignum
+ * optimization. Range: 0 to bignum_size-1, but can be negative during
+ * comparisons. precision_lower: grows ~1.24x per iteration. precision_upper:
+ * shrinks as numerator rescales. Current: int16_t signed to prevent comparison
+ * bugs on 16-bit systems.
  */
 typedef int16_t precision_bound_t;
 
@@ -154,6 +158,15 @@ typedef uint8_t operation_toggle_t;
  * Current: int matches function parameter conventions.
  */
 typedef int sign_control_t;
+
+/* - Bignum initialization */
+
+/* Small integer coefficients used to initialize bignums.
+ * Range: Small positive integers (typically 4 for Bellard's coefficient).
+ * Used in bignum_set() to establish initial values.
+ * Current: uint32_t allows 32-bit write optimization at bignum high end.
+ */
+typedef uint32_t bignum_init_value_t;
 
 /*
  * Lightweight printing functions that avoid printf overhead (~3KB+ on 6502).
@@ -272,7 +285,7 @@ bignum numerator;
  */
 
 /* Initialize a bignum to a small integer value, clearing the fractional part */
-void bignum_set(bignum bn, uint32_t value);
+void bignum_set(bignum bn, bignum_init_value_t value);
 
 /* Perform division and add or subtract the quotient into the sum bignum.
  * This implements the core mathematical operation for each term in Bellard's
@@ -321,13 +334,13 @@ void calculate_pi_bellard(digit_count_t digits, guard_count_t guard_digits);
  * is written as a 32-bit word at the high end, which may span multiple bytes.
  * This is used to set initial coefficients like 4 for the Bellard formula.
  */
-void bignum_set(bignum bn, uint32_t value) {
+void bignum_set(bignum bn, bignum_init_value_t value) {
     /* Clear fractional portion from precision_lower to bignum_size-1 */
     for (array_index_t i = precision_lower; i < bignum_size; i++) {
         bn[i] = 0;
     }
     /* Place integer value at highest position (32-bit write) */
-    *(uint32_t *)&bn[bignum_size - 1] = value;
+    *(bignum_init_value_t *)&bn[bignum_size - 1] = value;
 }
 
 /*
@@ -346,7 +359,7 @@ void bignum_set(bignum bn, uint32_t value) {
  * implementing the alternating signs in Bellard's series.
  */
 void bignum_div_addsub(sign_control_t is_subtract) {
-    remainder_t remainder = 0;           /* Running remainder for division */
+    remainder_t remainder = 0;            /* Running remainder for division */
     divisor_t divisor_original = divisor; /* Preserve original divisor */
 
     /* Process bignum from most significant to least significant byte */
@@ -354,7 +367,7 @@ void bignum_div_addsub(sign_control_t is_subtract) {
         /* Build up remainder: shift left 8 bits and add next byte */
         remainder = remainder * 256 + numerator[i];
         quotient_byte_t quotient_byte = 0; /* Quotient byte being constructed */
-        divisor *= 256;             /* Scale divisor to match remainder */
+        divisor *= 256; /* Scale divisor to match remainder */
 
         /* Binary division: extract 8 bits one at a time */
         for (uint8_t j = 0; j <= 7; j++) {
@@ -369,9 +382,9 @@ void bignum_div_addsub(sign_control_t is_subtract) {
         /* Add or subtract quotient byte into sum with carry propagation */
         array_index_t sum_idx = i;
         do {
-            signed_arith_t tmp = is_subtract
-                              ? (sum_accumulator[sum_idx] - quotient_byte)
-                              : (sum_accumulator[sum_idx] + quotient_byte);
+            signed_arith_t tmp =
+                is_subtract ? (sum_accumulator[sum_idx] - quotient_byte)
+                            : (sum_accumulator[sum_idx] + quotient_byte);
             sum_accumulator[sum_idx++] = tmp & 255; /* Store low byte */
             /* Carry/borrow continues if result outside byte range */
             quotient_byte = (tmp >= 0 && tmp <= 255) ? 0 : 1;
@@ -426,7 +439,7 @@ void bignum_multiply_250(bignum bn) {
 
     /* Process from least to most significant byte */
     for (array_index_t i = precision_lower; i <= bignum_size; i++) {
-        temp = (uint32_t)bn[i] * 250 + carry;
+        temp = (temp_arith_t)bn[i] * 250 + carry;
         bn[i] = temp & 255; /* Store low byte */
         carry = temp >> 8;  /* Propagate high byte as carry */
     }
@@ -449,7 +462,7 @@ void bignum_multiply_1000(bignum bn) {
 
     /* Process from least to most significant byte */
     for (array_index_t i = precision_lower; i <= bignum_size; i++) {
-        temp = (uint32_t)bn[i] * 1000 + carry;
+        temp = (temp_arith_t)bn[i] * 1000 + carry;
         bn[i] = temp & 255; /* Store low byte */
         carry = temp >> 8;  /* Propagate high byte as carry */
     }
@@ -486,10 +499,11 @@ void calculate_pi_bellard(digit_count_t digits, guard_count_t guard_digits) {
      * four_n = 4n (0, 4, 8, 12, 16, ...)
      * ten_n = 10n (0, 10, 20, 30, 40, ...)
      */
-    digit_progression_t three_n = 0; /* 3n counter - tracks total digits produced */
-    iter_4n_t four_n = 0;  /* 4n counter - used in denominators 4n+1, 4n+3 */
-    iter_10n_t ten_n = 0;  /* 10n counter - used in denominators 10n+1, 10n+3,
-                             10n+5, 10n+7, 10n+9 */
+    digit_progression_t three_n =
+        0;                /* 3n counter - tracks total digits produced */
+    iter_4n_t four_n = 0; /* 4n counter - used in denominators 4n+1, 4n+3 */
+    iter_10n_t ten_n = 0; /* 10n counter - used in denominators 10n+1, 10n+3,
+                            10n+5, 10n+7, 10n+9 */
     operation_toggle_t op = 1; /* Operation toggle: 1=add, 0=subtract */
 
     /* Initialize sum accumulator to 4 */
@@ -537,7 +551,8 @@ void calculate_pi_bellard(digit_count_t digits, guard_count_t guard_digits) {
         bignum_div_addsub(op);
 
         /* Extract three digits from sum's integer part */
-        digit_value_t digit_val = *(digit_value_t *)&sum_accumulator[bignum_size - 1];
+        digit_value_t digit_val =
+            *(digit_value_t *)&sum_accumulator[bignum_size - 1];
 
         /* Output digits with appropriate formatting */
         if (three_n > 0) {
