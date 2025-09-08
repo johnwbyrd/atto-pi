@@ -1,6 +1,6 @@
 # atto-pi
 
-![pi_50k](https://github.com/user-attachments/assets/06a573ca-0f0e-4c05-b425-a32cbac885e8)
+![Commodore 64 calculating 50000 digits of pi](https://github.com/user-attachments/assets/06a573ca-0f0e-4c05-b425-a32cbac885e8)
 
 Author: John Byrd <johnwbyrd at gmail dot com>
 
