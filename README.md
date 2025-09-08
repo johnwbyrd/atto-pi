@@ -1,5 +1,7 @@
 # atto-pi
 
+![pi_50k](https://github.com/user-attachments/assets/06a573ca-0f0e-4c05-b425-a32cbac885e8)
+
 Author: John Byrd <johnwbyrd at gmail dot com>
 
 This is a tiny C program for computing pi in small embedded environments.
