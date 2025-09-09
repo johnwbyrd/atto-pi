@@ -18,7 +18,7 @@ Rewriting to have a numerator of 1 in each term:
 
 $$\pi = \sum_{n=0}^{\infty} \frac{(-1)^{n}}{2^{10n-2}} \left[ \frac{-1}{(4n+1) \cdot 8} - \frac{1}{(4n+3) \cdot 256} + \frac{1}{(10n+1) \cdot 1} - \frac{1}{(10n+3) \cdot 4} - \frac{1}{(10n+5) \cdot 64} - \frac{1}{(10n+7) \cdot 64} + \frac{1}{(10n+9) \cdot 256} \right]$$
 
-This formula expresses $$\pi$$ as a series where each term has a divisor of the form $(an+b)$ multiplied by a power of 2. The common factor $2^{10n-2}$ represents a shift that increases by 10 bits per iteration. This representation is especially convenient for us, because now we represent many multiplies as bit shifts, and all divisions as inverse operations.
+This formula expresses $$\pi$$ as a series where each term has a divisor of the form $(an+b)$ multiplied by a power of 2. The common factor $2^{10n-2}$ represents a shift that increases by 10 bits per iteration. This representation is especially convenient for us, because now we represent many multiplies and divisions as bit shifts, and all bignum long divisions as inverse operations.
 
 ## Arithmetic implementation
 
