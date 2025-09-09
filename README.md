@@ -16,28 +16,21 @@ $$\pi = \frac{1}{2^{6}} \sum_{n=0}^{\infty} \frac{(-1)^{n}}{2^{10n}} \left[ \fra
 
 **Algebraic transformations to implementation form:**
 
-Multiply both sides by 64 = 2^{6} to eliminate the outer fraction:
+Multiply both sides by $$64 = 2^{6}$$ to eliminate the outer fraction:
 
 $$64\pi = \sum_{n=0}^{\infty} \frac{(-1)^{n}}{2^{10n}} \left[ \frac{-32}{4n+1} - \frac{1}{4n+3} + \frac{256}{10n+1} - \frac{64}{10n+3} - \frac{4}{10n+5} - \frac{4}{10n+7} + \frac{1}{10n+9} \right]$$
 
-Distribute 2^{10n} in each denominator:
+Distribute $$2^{10n}$$ in each denominator:
 
 $$64\pi = \sum_{n=0}^{\infty} (-1)^{n} \left[ \frac{-32}{2^{10n}(4n+1)} - \frac{1}{2^{10n}(4n+3)} + \frac{256}{2^{10n}(10n+1)} - \frac{64}{2^{10n}(10n+3)} - \frac{4}{2^{10n}(10n+5)} - \frac{4}{2^{10n}(10n+7)} + \frac{1}{2^{10n}(10n+9)} \right]$$
 
-Separate constants and rewrite with 1024^{n} = (2^{10})^{n} = 2^{10n}:
+Separate constants and rewrite with $$1024^{n} = (2^{10})^{n} = 2^{10n}$$:
 
 $$64\pi = \sum_{n=0}^{\infty} (-1)^{n} \left[ \frac{-32}{1024^{n}(4n+1)} - \frac{1}{1024^{n}(4n+3)} + \frac{256}{1024^{n}(10n+1)} - \frac{64}{1024^{n}(10n+3)} - \frac{4}{1024^{n}(10n+5)} - \frac{4}{1024^{n}(10n+7)} + \frac{1}{1024^{n}(10n+9)} \right]$$
 
-This matches the seven terms computed in the code:
-1. -32/(1024^{n}(10n+1)) => divisor = (ten_n + 1)
-2. -1/(1024^{n}(4n+3) * 4) => divisor = (ten_n + 3) * 4
-3. 256/(1024^{n}(10n+5) * 64) => divisor = (ten_n + 5) * 64
-4. -64/(1024^{n}(10n+7) * 64) => divisor = (ten_n + 7) * 64
-5. -4/(1024^{n}(10n+9) * 256) => divisor = (ten_n + 9) * 256
-6. -4/(1024^{n}(4n+1) * 8) => divisor = (four_n + 1) * 8
-7. 1/(1024^{n}(4n+3) * 256) => divisor = (four_n + 3) * 256
+This representation matches the terms computed in the code.
 
-The alternating series (-1)^{n} is implemented via the `op` toggle variable in the code, which alternates between addition and subtraction for each term.
+The alternating series $$(-1)^{n}$$ is implemented via the `op` toggle variable in the code, which alternates between addition and subtraction for each term.
 
 Each iteration evaluates seven rational terms, alternating between addition and subtraction. The denominators grow as functions of the iteration counter, requiring arbitrary-precision division to maintain accuracy across thousands of digits.
 
