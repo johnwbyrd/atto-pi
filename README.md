@@ -14,7 +14,7 @@ The mathematical foundation is the infinite series:
 
 $$\pi = \frac{1}{2^{6}} \sum_{n=0}^{\infty} \frac{(-1)^{n}}{2^{10n}} \left[ \frac{-2^{5}}{4n+1} - \frac{1}{4n+3} + \frac{2^{8}}{10n+1} - \frac{2^{6}}{10n+3} - \frac{2^{2}}{10n+5} - \frac{2^{2}}{10n+7} + \frac{1}{10n+9} \right]$$
 
-Rewriting to have a constant numerator in each term:
+Rewriting to have a numerator of 1 in each term:
 
 $$\pi = \sum_{n=0}^{\infty} \frac{(-1)^{n}}{2^{10n-2}} \left[ \frac{-1}{(4n+1) \cdot 8} - \frac{1}{(4n+3) \cdot 256} + \frac{1}{(10n+1) \cdot 1} - \frac{1}{(10n+3) \cdot 4} - \frac{1}{(10n+5) \cdot 64} - \frac{1}{(10n+7) \cdot 64} + \frac{1}{(10n+9) \cdot 256} \right]$$
 
