@@ -8,7 +8,7 @@ This is a tiny C program for computing pi in small embedded environments. It was
 
 When compiled using [LLVM-MOS](https://wwww.llvm-mos.org) for the unexpanded Commodore 64 computer, it can generate up to 50k successive digits of pi.  Total code size is around 8KB, and the remainder of the C64's memory is used for bignums.
 
-This program implements [François Bellard's 1997 decimal spigot algorithm for computing pi](https://bellard.org/pi/pi_bin/pi_bin.html), which is a spigot algorithm that generates decimal digits sequentially without storing the entire result. Unlike the more famous [Bailey-Borwein-Plouffe formula](https://observablehq.com/@rreusser/computing-with-the-bailey-borwein-plouffe-formula), this decimal adaptation of Bellard's binary series works in base 10.
+This program implements [François Bellard's 1997 decimal spigot algorithm for computing pi](https://bellard.org/pi/pi_bin/pi_bin.html), which is a spigot algorithm that generates decimal digits sequentially without storing the entire result. Unlike the more famous [Bailey-Borwein-Plouffe formula](https://observablehq.com/@rreusser/computing-with-the-bailey-borwein-plouffe-formula), which operates conceptually in hexadecimal, this adaptation of Bellard's series works ten bits at a time. We take advantage of 1024's nearness to 1000, in order to generate three decimal digits of $$\pi$$ per iteration.
 
 The mathematical foundation is the infinite series:
 
