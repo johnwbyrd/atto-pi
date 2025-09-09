@@ -16,21 +16,33 @@ $$\pi = \frac{1}{2^{6}} \sum_{n=0}^{\infty} \frac{(-1)^{n}}{2^{10n}} \left[ \fra
 
 **Algebraic transformations to implementation form:**
 
-Multiply both sides by $$64 = 2^{6}$$ to eliminate the outer fraction:
+$$\pi = \frac{1}{64} \sum_{n=0}^{\infty} \frac{(-1)^{n}}{1024^{n}} \left[ \frac{-32}{4n+1} - \frac{1}{4n+3} + \frac{256}{10n+1} - \frac{64}{10n+3} - \frac{4}{10n+5} - \frac{4}{10n+7} + \frac{1}{10n+9} \right]$$
 
-$$64\pi = \sum_{n=0}^{\infty} \frac{(-1)^{n}}{2^{10n}} \left[ \frac{-32}{4n+1} - \frac{1}{4n+3} + \frac{256}{10n+1} - \frac{64}{10n+3} - \frac{4}{10n+5} - \frac{4}{10n+7} + \frac{1}{10n+9} \right]$$
-
-Distribute $$2^{10n}$$ in each denominator:
-
-$$64\pi = \sum_{n=0}^{\infty} (-1)^{n} \left[ \frac{-32}{2^{10n}(4n+1)} - \frac{1}{2^{10n}(4n+3)} + \frac{256}{2^{10n}(10n+1)} - \frac{64}{2^{10n}(10n+3)} - \frac{4}{2^{10n}(10n+5)} - \frac{4}{2^{10n}(10n+7)} + \frac{1}{2^{10n}(10n+9)} \right]$$
-
-Separate constants and rewrite with $$1024^{n} = (2^{10})^{n} = 2^{10n}$$:
+$$64\pi = \sum_{n=0}^{\infty} \frac{(-1)^{n}}{1024^{n}} \left[ \frac{-32}{4n+1} - \frac{1}{4n+3} + \frac{256}{10n+1} - \frac{64}{10n+3} - \frac{4}{10n+5} - \frac{4}{10n+7} + \frac{1}{10n+9} \right]$$
 
 $$64\pi = \sum_{n=0}^{\infty} (-1)^{n} \left[ \frac{-32}{1024^{n}(4n+1)} - \frac{1}{1024^{n}(4n+3)} + \frac{256}{1024^{n}(10n+1)} - \frac{64}{1024^{n}(10n+3)} - \frac{4}{1024^{n}(10n+5)} - \frac{4}{1024^{n}(10n+7)} + \frac{1}{1024^{n}(10n+9)} \right]$$
 
-This representation matches the terms computed in the code.
+$$64\pi = \sum_{n=0}^{\infty} (-1)^{n} \left[ \frac{256}{1024^{n}(10n+1)} - \frac{64}{1024^{n}(10n+3)} - \frac{4}{1024^{n}(10n+5)} - \frac{4}{1024^{n}(10n+7)} + \frac{1}{1024^{n}(10n+9)} - \frac{32}{1024^{n}(4n+1)} - \frac{1}{1024^{n}(4n+3)} \right]$$
 
-The alternating series $$(-1)^{n}$$ is implemented via the `op` toggle variable in the code, which alternates between addition and subtraction for each term.
+In implementation, each term $\frac{c}{1024^{n} \cdot d}$ becomes $\frac{\text{numerator}}{d \cdot k}$ where $k$ adjusts for the $1024^n$ factor:
+
+$$\text{divisor}_1 = (10n+1) \cdot 1$$
+$$\text{divisor}_2 = (10n+3) \cdot 4$$
+$$\text{divisor}_3 = (10n+5) \cdot 64$$
+$$\text{divisor}_4 = (10n+7) \cdot 64$$
+$$\text{divisor}_5 = (10n+9) \cdot 256$$
+$$\text{divisor}_6 = (4n+1) \cdot 8$$
+$$\text{divisor}_7 = (4n+3) \cdot 256$$
+
+The transformation from $\frac{-32}{1024^{n}(4n+1)}$ to using divisor $(4n+1) \cdot 8$:
+
+$$\frac{-32}{1024^{n}(4n+1)} = \frac{-32}{1024^{n}} \cdot \frac{1}{(4n+1)} = \frac{-4 \cdot 8}{1024^{n}} \cdot \frac{1}{(4n+1)} = \frac{-4}{1024^{n}} \cdot \frac{8}{(4n+1)}$$
+
+In the implementation, the $\frac{-4}{1024^{n}}$ factor is handled by the numerator rescaling, and the division by $(4n+1) \cdot 8$ is performed directly:
+
+$$\frac{\text{numerator}}{(4n+1) \cdot 8}$$
+
+Where the numerator incorporates the $-4$ coefficient and the $1024^{-n}$ scaling factor.
 
 Each iteration evaluates seven rational terms, alternating between addition and subtraction. The denominators grow as functions of the iteration counter, requiring arbitrary-precision division to maintain accuracy across thousands of digits.
 
