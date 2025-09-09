@@ -580,34 +580,27 @@ void calculate_pi(digit_count_t digits, guard_count_t guard_digits) {
          * adaptation of his binary BBP formula for decimal digit extraction.
          */
 
-        /* Term 1: -32/(10n+1) - but coefficient absorbed into numerator */
         divisor = ten_n + 1;
         if (three_n >
             0) { /* Skip first iteration to avoid double-counting initial 4 */
             bignum_div_addsub(1 - op);
         }
 
-        /* Term 2: -1/((10n+3)*4) = -1/(4*(10n+3)) */
         divisor = (ten_n + 3) * 4;
         bignum_div_addsub(op);
 
-        /* Term 3: +256/((10n+5)*64) = +4/(10n+5) */
         divisor = (ten_n + 5) * 64;
         bignum_div_addsub(op);
 
-        /* Term 4: -64/((10n+7)*64) = -1/(10n+7) */
         divisor = (ten_n + 7) * 64;
         bignum_div_addsub(op);
 
-        /* Term 5: -4/((10n+9)*256) = -1/(64*(10n+9)) */
         divisor = (ten_n + 9) * 256;
         bignum_div_addsub(1 - op);
 
-        /* Term 6: -4/((4n+1)*8) = -1/(2*(4n+1)) */
         divisor = (four_n + 1) * 8;
         bignum_div_addsub(op);
 
-        /* Term 7: +1/((4n+3)*256) */
         divisor = (four_n + 3) * 256;
         bignum_div_addsub(op);
 
