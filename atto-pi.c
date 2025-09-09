@@ -579,6 +579,11 @@ void calculate_pi(digit_count_t digits, guard_count_t guard_digits) {
          * The alternating signs and specific denominators derive from Bellard's
          * adaptation of his binary BBP formula for decimal digit extraction.
          */
+        divisor = (four_n + 1) * 8;
+        bignum_div_addsub(op);
+
+        divisor = (four_n + 3) * 256;
+        bignum_div_addsub(op);
 
         divisor = ten_n + 1;
         if (three_n >
@@ -597,12 +602,6 @@ void calculate_pi(digit_count_t digits, guard_count_t guard_digits) {
 
         divisor = (ten_n + 9) * 256;
         bignum_div_addsub(1 - op);
-
-        divisor = (four_n + 1) * 8;
-        bignum_div_addsub(op);
-
-        divisor = (four_n + 3) * 256;
-        bignum_div_addsub(op);
 
         /* Extract three digits from sum's integer part */
         digit_value_t digit_val =

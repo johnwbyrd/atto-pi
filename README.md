@@ -4,7 +4,7 @@
 
 Author: John Byrd <johnwbyrd at gmail dot com>
 
-This is a tiny C program for computing pi in small embedded environments.
+This is a tiny C program for computing pi in small embedded environments. It was written for the LLVM-MOS C/C++ compiler, but it should work on other reasonably standards compliant compilers as well.
 
 When compiled using [LLVM-MOS](https://wwww.llvm-mos.org) for the unexpanded Commodore 64 computer, it can generate up to 50k successive digits of pi.  Total code size is around 8KB, and the remainder of the C64's memory is used for bignums.
 
@@ -14,39 +14,23 @@ The mathematical foundation is the infinite series:
 
 $$\pi = \frac{1}{2^{6}} \sum_{n=0}^{\infty} \frac{(-1)^{n}}{2^{10n}} \left[ \frac{-2^{5}}{4n+1} - \frac{1}{4n+3} + \frac{2^{8}}{10n+1} - \frac{2^{6}}{10n+3} - \frac{2^{2}}{10n+5} - \frac{2^{2}}{10n+7} + \frac{1}{10n+9} \right]$$
 
-**Algebraic transformations to implementation form:**
+We can optimize Bellard's equation for operations on 8 bits at a time:
 
-$$\pi = \frac{1}{64} \sum_{n=0}^{\infty} \frac{(-1)^{n}}{1024^{n}} \left[ \frac{-32}{4n+1} - \frac{1}{4n+3} + \frac{256}{10n+1} - \frac{64}{10n+3} - \frac{4}{10n+5} - \frac{4}{10n+7} + \frac{1}{10n+9} \right]$$
+$$\frac{(-1)^{n}}{1024^{n}} \left[ \frac{-32}{4n+1} - \frac{1}{4n+3} + \frac{256}{10n+1} - \frac{64}{10n+3} - \frac{4}{10n+5} - \frac{4}{10n+7} + \frac{1}{10n+9} \right]$$
 
-$$64\pi = \sum_{n=0}^{\infty} \frac{(-1)^{n}}{1024^{n}} \left[ \frac{-32}{4n+1} - \frac{1}{4n+3} + \frac{256}{10n+1} - \frac{64}{10n+3} - \frac{4}{10n+5} - \frac{4}{10n+7} + \frac{1}{10n+9} \right]$$
+$$= (-1)^{n} \left[ \frac{-4 \times 8}{1024^{n}(4n+1)} - \frac{1}{1024^{n}(4n+3)} + \frac{256}{1024^{n}(10n+1)} - \frac{16 \times 4}{1024^{n}(10n+3)} - \frac{1 \times 4}{1024^{n}(10n+5)} - \frac{1 \times 4}{1024^{n}(10n+7)} + \frac{1}{1024^{n}(10n+9)} \right]$$
 
-$$64\pi = \sum_{n=0}^{\infty} (-1)^{n} \left[ \frac{-32}{1024^{n}(4n+1)} - \frac{1}{1024^{n}(4n+3)} + \frac{256}{1024^{n}(10n+1)} - \frac{64}{1024^{n}(10n+3)} - \frac{4}{1024^{n}(10n+5)} - \frac{4}{1024^{n}(10n+7)} + \frac{1}{1024^{n}(10n+9)} \right]$$
+Factors of powers of 2 in numerators naturally combine with denominators to form the implementation divisors:
 
-$$64\pi = \sum_{n=0}^{\infty} (-1)^{n} \left[ \frac{256}{1024^{n}(10n+1)} - \frac{64}{1024^{n}(10n+3)} - \frac{4}{1024^{n}(10n+5)} - \frac{4}{1024^{n}(10n+7)} + \frac{1}{1024^{n}(10n+9)} - \frac{32}{1024^{n}(4n+1)} - \frac{1}{1024^{n}(4n+3)} \right]$$
+- $(4n+1) \times 8$ from $\frac{-4 \times 8}{(4n+1)}$
+- $(4n+3) \times 256$ from $\frac{-1}{(4n+3)}$ with implicit scaling
+- $10n+1$ from $\frac{256}{(10n+1)}$ with cancellation
+- $(10n+3) \times 4$ from $\frac{-16 \times 4}{(10n+3)}$
+- $(10n+5) \times 64$ from $\frac{-1 \times 4}{(10n+5)}$ with scaling
+- $(10n+7) \times 64$ from $\frac{-1 \times 4}{(10n+7)}$ with scaling
+- $(10n+9) \times 256$ from $\frac{1}{(10n+9)}$ with implicit scaling
 
-In implementation, each term $\frac{c}{1024^{n} \cdot d}$ becomes $\frac{\text{numerator}}{d \cdot k}$ where $k$ adjusts for the $1024^n$ factor:
-
-$$\text{divisor}_1 = (10n+1) \cdot 1$$
-$$\text{divisor}_2 = (10n+3) \cdot 4$$
-$$\text{divisor}_3 = (10n+5) \cdot 64$$
-$$\text{divisor}_4 = (10n+7) \cdot 64$$
-$$\text{divisor}_5 = (10n+9) \cdot 256$$
-$$\text{divisor}_6 = (4n+1) \cdot 8$$
-$$\text{divisor}_7 = (4n+3) \cdot 256$$
-
-The transformation from $\frac{-32}{1024^{n}(4n+1)}$ to using divisor $(4n+1) \cdot 8$:
-
-$$\frac{-32}{1024^{n}(4n+1)} = \frac{-32}{1024^{n}} \cdot \frac{1}{(4n+1)} = \frac{-4 \cdot 8}{1024^{n}} \cdot \frac{1}{(4n+1)} = \frac{-4}{1024^{n}} \cdot \frac{8}{(4n+1)}$$
-
-In the implementation, the $\frac{-4}{1024^{n}}$ factor is handled by the numerator rescaling, and the division by $(4n+1) \cdot 8$ is performed directly:
-
-$$\frac{\text{numerator}}{(4n+1) \cdot 8}$$
-
-Where the numerator incorporates the $-4$ coefficient and the $1024^{-n}$ scaling factor.
-
-Each iteration evaluates seven rational terms, alternating between addition and subtraction. The denominators grow as functions of the iteration counter, requiring arbitrary-precision division to maintain accuracy across thousands of digits.
-
-This particular implementation was inspired by [David Banks (hoglet67)'s recent work](https://github.com/BigEd/pi-spigot-for-micros) on implementing spigots on the BBC Micro. It was written for the LLVM-MOS C/C++ compiler, but it should work on other reasonably standards compliant compilers as well.
+These transformations from Bellard's formula to implementation divisors occur naturally when adapting the binary series for decimal digit extraction using byte-oriented arithmetic. The factors of 8, 256, 4, and 64 emerge from the relationship between the original coefficients and the binary computation base.
 
 ## Arithmetic implementation
 
@@ -75,3 +59,9 @@ Practical calculation of pi all about limits. It is necessary to track types exa
 The algorithm produces three decimal digits per iteration, with the first iteration yielding just the initial digit 3 followed by the decimal point. Each subsequent iteration contributes three more digits to pi's expansion. The performance characteristics vary dramatically across different digit counts - computing 100 digits runs relatively quickly, 1000 digits requires noticeable time, while 10,000 digits on period hardware like a Commodore 64 can take hours due to the quadratic scaling of the arithmetic operations.
 
 Memory consumption follows a predictable linear relationship with the requested digit count. Each bignum requires approximately 0.415241 bytes per decimal digit plus a small guard factor for computational headroom. For 1,000 digits, each bignum occupies roughly 418 bytes, totaling 836 bytes for both the accumulator and numerator. At 10,000 digits, this grows to about 4,155 bytes per bignum.
+
+## Thanks
+
+This particular implementation was inspired by [David Banks (hoglet67)'s recent work](https://github.com/BigEd/pi-spigot-for-micros) on implementing spigots on the BBC Micro.
+
+Thanks also to [mysterymath](https://github.com/mysterymath), christen, and the other people who verified this implementation on real hardware.
