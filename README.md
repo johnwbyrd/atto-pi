@@ -16,8 +16,6 @@ $$\pi = \frac{1}{2^{6}} \sum_{n=0}^{\infty} \frac{(-1)^{n}}{2^{10n}} \left[ \fra
 
 We can optimize Bellard's equation for operations on 8 bits at a time:
 
-$$\frac{(-1)^{n}}{1024^{n}} \left[ \frac{-32}{4n+1} - \frac{1}{4n+3} + \frac{256}{10n+1} - \frac{64}{10n+3} - \frac{4}{10n+5} - \frac{4}{10n+7} + \frac{1}{10n+9} \right]$$
-
 $$= (-1)^{n} \left[ \frac{-4 \times 8}{1024^{n}(4n+1)} - \frac{1}{1024^{n}(4n+3)} + \frac{256}{1024^{n}(10n+1)} - \frac{16 \times 4}{1024^{n}(10n+3)} - \frac{1 \times 4}{1024^{n}(10n+5)} - \frac{1 \times 4}{1024^{n}(10n+7)} + \frac{1}{1024^{n}(10n+9)} \right]$$
 
 Factors of powers of 2 in numerators naturally combine with denominators to form the implementation divisors:
