@@ -14,19 +14,26 @@ The mathematical foundation is the infinite series:
 
 $$\pi = \frac{1}{2^{6}} \sum_{n=0}^{\infty} \frac{(-1)^{n}}{2^{10n}} \left[ \frac{-2^{5}}{4n+1} - \frac{1}{4n+3} + \frac{2^{8}}{10n+1} - \frac{2^{6}}{10n+3} - \frac{2^{2}}{10n+5} - \frac{2^{2}}{10n+7} + \frac{1}{10n+9} \right]$$
 
-For byte-oriented computation, the implementation works with the sum multiplied by 64, yielding digits of $64\pi$. Since $1024^n = 4^n \cdot 256^n$, we can factor out $\frac{1}{256^n}$ to process 8 bits at a time:
+For byte-oriented computation, we work with $64\pi$ by multiplying both sides by 64:
 
-$$64\pi = \sum_{n=0}^{\infty} \frac{(-1)^{n}}{256^n} \left[ \frac{-32}{4^{n}(4n+1)} - \frac{1}{4^{n}(4n+3)} + \frac{256}{4^{n}(10n+1)} - \frac{64}{4^{n}(10n+3)} - \frac{4}{4^{n}(10n+5)} - \frac{4}{4^{n}(10n+7)} + \frac{1}{4^{n}(10n+9)} \right]$$
+$$64\pi = \sum_{n=0}^{\infty} \frac{(-1)^{n}}{1024^{n}} \left[ \frac{-32}{4n+1} - \frac{1}{4n+3} + \frac{256}{10n+1} - \frac{64}{10n+3} - \frac{4}{10n+5} - \frac{4}{10n+7} + \frac{1}{10n+9} \right]$$
 
-The factor of $\frac{1}{256^n}$ represents dropping n bytes (8 bits each) during binary long division. Each term simplifies to a divisor:
+Rewriting each term to have coefficient 1 in the numerator:
 
-- $\frac{-32}{4^n(4n+1)}$ → divisor $(4n+1) \times 8$ with remaining factor $\frac{-4}{4^n}$
-- $\frac{-1}{4^n(4n+3)}$ → divisor $(4n+3) \times 256$ with remaining factor $\frac{-4}{4^n}$  
-- $\frac{256}{4^n(10n+1)}$ → divisor $(10n+1) \times 1$ with remaining factor $\frac{256}{4^n}$
-- $\frac{-64}{4^n(10n+3)}$ → divisor $(10n+3) \times 4$ with remaining factor $\frac{-16}{4^n}$
-- $\frac{-4}{4^n(10n+5)}$ → divisor $(10n+5) \times 64$ with remaining factor $\frac{-256}{4^n}$
-- $\frac{-4}{4^n(10n+7)}$ → divisor $(10n+7) \times 64$ with remaining factor $\frac{-256}{4^n}$
-- $\frac{1}{4^n(10n+9)}$ → divisor $(10n+9) \times 256$ with remaining factor $\frac{256}{4^n}$
+$$64\pi = \sum_{n=0}^{\infty} (-1)^{n} \left[ \frac{1}{\frac{1024^{n}(4n+1)}{-32}} + \frac{1}{\frac{1024^{n}(4n+3)}{-1}} + \frac{1}{\frac{1024^{n}(10n+1)}{256}} + \frac{1}{\frac{1024^{n}(10n+3)}{-64}} + \frac{1}{\frac{1024^{n}(10n+5)}{-4}} + \frac{1}{\frac{1024^{n}(10n+7)}{-4}} + \frac{1}{\frac{1024^{n}(10n+9)}{1}} \right]$$
+
+Since $1024^n = 256^n \cdot 4^n$:
+
+$$64\pi = \sum_{n=0}^{\infty} (-1)^{n} \left[ \frac{1}{\frac{256^n \cdot 4^n(4n+1)}{-32}} + \frac{1}{\frac{256^n \cdot 4^n(4n+3)}{-1}} + \frac{1}{\frac{256^n \cdot 4^n(10n+1)}{256}} + \frac{1}{\frac{256^n \cdot 4^n(10n+3)}{-64}} + \frac{1}{\frac{256^n \cdot 4^n(10n+5)}{-4}} + \frac{1}{\frac{256^n \cdot 4^n(10n+7)}{-4}} + \frac{1}{\frac{256^n \cdot 4^n(10n+9)}{1}} \right]$$
+
+Simplifying each denominator to express the implementation divisors:
+- $\frac{256^n \cdot 4^n(4n+1)}{-32} = \frac{256^n \cdot 4^n(4n+1)}{-4 \times 8} \Rightarrow$ divisor $(4n+1) \times 8$
+- $\frac{256^n \cdot 4^n(4n+3)}{-1} \Rightarrow$ divisor $(4n+3) \times 256$  
+- $\frac{256^n \cdot 4^n(10n+1)}{256} \Rightarrow$ divisor $(10n+1)$
+- $\frac{256^n \cdot 4^n(10n+3)}{-64} = \frac{256^n \cdot 4^n(10n+3)}{-16 \times 4} \Rightarrow$ divisor $(10n+3) \times 4$
+- $\frac{256^n \cdot 4^n(10n+5)}{-4} = \frac{256^n \cdot 4^n(10n+5)}{-1 \times 4} \Rightarrow$ divisor $(10n+5) \times 64$
+- $\frac{256^n \cdot 4^n(10n+7)}{-4} = \frac{256^n \cdot 4^n(10n+7)}{-1 \times 4} \Rightarrow$ divisor $(10n+7) \times 64$
+- $\frac{256^n \cdot 4^n(10n+9)}{1} \Rightarrow$ divisor $(10n+9) \times 256$
 
 These transformations from Bellard's formula to implementation divisors occur naturally when adapting the binary series for decimal digit extraction using byte-oriented arithmetic. The factors of 8, 256, 4, and 64 emerge from the relationship between the original coefficients and the binary computation base.
 
