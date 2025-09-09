@@ -16,7 +16,7 @@ $$\pi = \frac{1}{2^6} \sum_{n=0}^{\infty} \frac{(-1)^n}{2^{10n}} \left[ \frac{-2
 
 Each iteration evaluates seven rational terms, alternating between addition and subtraction. The denominators grow as functions of the iteration counter, requiring arbitrary-precision division to maintain accuracy across thousands of digits.
 
-This particular implementation was inspired by [David Banks (hoglet)'s recent work](https://github.com/BigEd/pi-spigot-for-micros) on implementing spigots on the BBC Micro. It was written for the LLVM-MOS C/C++ compiler, but it should work on other reasonably standards compliant compilers as well.
+This particular implementation was inspired by [David Banks (hoglet67)'s recent work](https://github.com/BigEd/pi-spigot-for-micros) on implementing spigots on the BBC Micro. It was written for the LLVM-MOS C/C++ compiler, but it should work on other reasonably standards compliant compilers as well.
 
 ## Arithmetic implementation
 
