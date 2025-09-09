@@ -12,7 +12,32 @@ This program implements [François Bellard's 1997 decimal spigot algorithm for c
 
 The mathematical foundation is the infinite series:
 
-$$\pi = \frac{1}{2^6} \sum_{n=0}^{\infty} \frac{(-1)^n}{2^{10n}} \left[ \frac{-2^5}{4n+1} - \frac{1}{4n+3} + \frac{2^8}{10n+1} - \frac{2^6}{10n+3} - \frac{2^2}{10n+5} - \frac{2^2}{10n+7} + \frac{1}{10n+9} \right]$$
+$$\pi = \frac{1}{2^{6}} \sum_{n=0}^{\infty} \frac{(-1)^{n}}{2^{10n}} \left[ \frac{-2^{5}}{4n+1} - \frac{1}{4n+3} + \frac{2^{8}}{10n+1} - \frac{2^{6}}{10n+3} - \frac{2^{2}}{10n+5} - \frac{2^{2}}{10n+7} + \frac{1}{10n+9} \right]$$
+
+**Algebraic transformations to implementation form:**
+
+Multiply both sides by 64 = 2^{6} to eliminate the outer fraction:
+
+$$64\pi = \sum_{n=0}^{\infty} \frac{(-1)^{n}}{2^{10n}} \left[ \frac{-32}{4n+1} - \frac{1}{4n+3} + \frac{256}{10n+1} - \frac{64}{10n+3} - \frac{4}{10n+5} - \frac{4}{10n+7} + \frac{1}{10n+9} \right]$$
+
+Distribute 2^{10n} in each denominator:
+
+$$64\pi = \sum_{n=0}^{\infty} (-1)^{n} \left[ \frac{-32}{2^{10n}(4n+1)} - \frac{1}{2^{10n}(4n+3)} + \frac{256}{2^{10n}(10n+1)} - \frac{64}{2^{10n}(10n+3)} - \frac{4}{2^{10n}(10n+5)} - \frac{4}{2^{10n}(10n+7)} + \frac{1}{2^{10n}(10n+9)} \right]$$
+
+Separate constants and rewrite with 1024^{n} = (2^{10})^{n} = 2^{10n}:
+
+$$64\pi = \sum_{n=0}^{\infty} (-1)^{n} \left[ \frac{-32}{1024^{n}(4n+1)} - \frac{1}{1024^{n}(4n+3)} + \frac{256}{1024^{n}(10n+1)} - \frac{64}{1024^{n}(10n+3)} - \frac{4}{1024^{n}(10n+5)} - \frac{4}{1024^{n}(10n+7)} + \frac{1}{1024^{n}(10n+9)} \right]$$
+
+This matches the seven terms computed in the code:
+1. -32/(1024^{n}(10n+1)) => divisor = (ten_n + 1)
+2. -1/(1024^{n}(4n+3) * 4) => divisor = (ten_n + 3) * 4
+3. 256/(1024^{n}(10n+5) * 64) => divisor = (ten_n + 5) * 64
+4. -64/(1024^{n}(10n+7) * 64) => divisor = (ten_n + 7) * 64
+5. -4/(1024^{n}(10n+9) * 256) => divisor = (ten_n + 9) * 256
+6. -4/(1024^{n}(4n+1) * 8) => divisor = (four_n + 1) * 8
+7. 1/(1024^{n}(4n+3) * 256) => divisor = (four_n + 3) * 256
+
+The alternating series (-1)^{n} is implemented via the `op` toggle variable in the code, which alternates between addition and subtraction for each term.
 
 Each iteration evaluates seven rational terms, alternating between addition and subtraction. The denominators grow as functions of the iteration counter, requiring arbitrary-precision division to maintain accuracy across thousands of digits.
 
@@ -27,6 +52,8 @@ The size of each bignum is calculated as $\text{digits} \times \frac{\log_2(10)}
 Division operations use binary long division, processing one bit at a time through an 8-bit window. This approach naturally fits the 6502's byte-oriented architecture while maintaining the precision needed for thousands of digits. The divisor is repeatedly halved while the remainder is compared against it, building up the quotient bit by bit.
 
 Multiplication by constants (250 and 1000) employs carry propagation across the entire bignum. Each byte is multiplied by the constant, added to any carry from the previous position, and the result is split into a stored byte and a carry for the next position. This process continues until the carry becomes zero, ensuring no precision is lost.
+
+Rescaling operations maintain the mathematical invariant needed for the spigot algorithm. The 250/256 factor specifically addresses the radix conversion error between the binary computation base and the decimal output base. Since 10^3 = 1000 ≈ 1024 = 2^10, each digit extraction introduces a small error that accumulates. The 250/256 rescaling (which equals 1000/1024) exactly compensates for this approximation.
 
 ## Algorithmic flow
 

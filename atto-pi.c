@@ -111,7 +111,8 @@ typedef int64_t precision_bound_t;
 
 /* Fixed-point precision tracker (scaled by 128 for integer math).
  * Range: 0 to ~(digit_count * 159). Growth: +159 per iteration.
- * Formula: precision_lower = precision_base / 128.
+ * Formula: precision_lower = precision_base / 128. This optimization
+ * signficantly reduces computation time in later iterations.
  * Current: int32_t handles growth rate across all practical digit counts.
  */
 #if MAX_DIGITS_LOG10 <= 7
@@ -274,7 +275,7 @@ void init_platform() {
  * - Terms with 10n: (10n+1), (10n+3)*4, (10n+5)*64, (10n+7)*64, (10n+9)*256
  * - Terms with 4n: (4n+1)*8, (4n+3)*256
  * Must be 64-bit to handle the largest denominators without overflow.
- * At 50,000 digits: largest value ~= (166,670+9)*256 = 42,669,824
+ * At 50,000 digits: largest value ~= (166,670+9)*256 = 42,671,744
  */
 divisor_t divisor;
 
@@ -323,10 +324,8 @@ bignum sum_accumulator;
  * Per-iteration cycle:
  *   1. Divided by each of the 7 term denominators via bignum_div_addsub()
  *   2. Rescaled by factor 250/256 to prevent unbounded growth
- * The 250/256 factor = 1000/1024, compensating for the base-1000 vs base-1024
- * approximation in the decimal adaptation of Bellard's binary series.
- * This rescaling maintains the mathematical precision balance between
- * sum_accumulator and numerator across iterations.
+ * The 250/256 factor = 1000/1024. This rescaling maintains the mathematical
+ * precision balance between sum_accumulator and numerator across iterations.
  */
 bignum numerator;
 
@@ -641,9 +640,6 @@ void calculate_pi(digit_count_t digits, guard_count_t guard_digits) {
         }
 
         /* Update loop variables for next iteration.
-         * Base grows by 159/128 ~= 1.2422, empirically determined to match
-         * the rate at which precision requirements increase per 3 digits.
-         * Each counter advances by its respective step size.
          */
         base += 159;
         precision_lower = base / 128; /* Convert to byte index */
@@ -694,7 +690,7 @@ void allocate_bignums(array_size_t size) {
     /* Allocate sum accumulator with error checking */
     sum_accumulator = (bignum)malloc(size + pad);
     if (!sum_accumulator) {
-        print_str("Error: Failed to alloc sum_accumulator: ");
+        print_str("Failed to alloc sum_accumulator: ");
         print_uint(size + pad);
         exit(1);
     }
