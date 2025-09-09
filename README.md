@@ -14,19 +14,19 @@ The mathematical foundation is the infinite series:
 
 $$\pi = \frac{1}{2^{6}} \sum_{n=0}^{\infty} \frac{(-1)^{n}}{2^{10n}} \left[ \frac{-2^{5}}{4n+1} - \frac{1}{4n+3} + \frac{2^{8}}{10n+1} - \frac{2^{6}}{10n+3} - \frac{2^{2}}{10n+5} - \frac{2^{2}}{10n+7} + \frac{1}{10n+9} \right]$$
 
-We can optimize Bellard's equation for operations on 8 bits at a time:
+We can optimize Bellard's equation for operations on 8 bits at a time by factoring out $\frac{1}{256^n}$ from each term:
 
-$$= (-1)^{n} \left[ \frac{-4 \times 8}{1024^{n}(4n+1)} - \frac{1}{1024^{n}(4n+3)} + \frac{256}{1024^{n}(10n+1)} - \frac{16 \times 4}{1024^{n}(10n+3)} - \frac{1 \times 4}{1024^{n}(10n+5)} - \frac{1 \times 4}{1024^{n}(10n+7)} + \frac{1}{1024^{n}(10n+9)} \right]$$
+$$= \frac{(-1)^{n}}{256^n} \left[ \frac{-4 \times 8}{4^{n}(4n+1)} - \frac{1}{4^{n}(4n+3)} + \frac{256}{4^{n}(10n+1)} - \frac{16 \times 4}{4^{n}(10n+3)} - \frac{1 \times 4}{4^{n}(10n+5)} - \frac{1 \times 4}{4^{n}(10n+7)} + \frac{1}{4^{n}(10n+9)} \right]$$
 
-Factors of powers of 2 in numerators naturally combine with denominators to form the implementation divisors:
+This factoring represents the dropping of n bytes (8 bits each) from each term during binary long division. Simplifying each term:
 
-- $(4n+1) \times 8$ from $\frac{-4 \times 8}{(4n+1)}$
-- $(4n+3) \times 256$ from $\frac{-1}{(4n+3)}$ with implicit scaling
-- $10n+1$ from $\frac{256}{(10n+1)}$ with cancellation
-- $(10n+3) \times 4$ from $\frac{-16 \times 4}{(10n+3)}$
-- $(10n+5) \times 64$ from $\frac{-1 \times 4}{(10n+5)}$ with scaling
-- $(10n+7) \times 64$ from $\frac{-1 \times 4}{(10n+7)}$ with scaling
-- $(10n+9) \times 256$ from $\frac{1}{(10n+9)}$ with implicit scaling
+- $\frac{-4 \times 8}{(4n+1)}$ becomes divisor $(4n+1) \times 8$
+- $\frac{-1}{(4n+3)}$ becomes divisor $(4n+3) \times 256$
+- $\frac{256}{(10n+1)}$ becomes divisor $10n+1$
+- $\frac{-16 \times 4}{(10n+3)}$ becomes divisor $(10n+3) \times 4$
+- $\frac{-1 \times 4}{(10n+5)}$ becomes divisor $(10n+5) \times 64$
+- $\frac{-1 \times 4}{(10n+7)}$ becomes divisor $(10n+7) \times 64$
+- $\frac{1}{(10n+9)}$ becomes divisor $(10n+9) \times 256$
 
 These transformations from Bellard's formula to implementation divisors occur naturally when adapting the binary series for decimal digit extraction using byte-oriented arithmetic. The factors of 8, 256, 4, and 64 emerge from the relationship between the original coefficients and the binary computation base.
 
