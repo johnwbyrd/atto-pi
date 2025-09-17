@@ -1,5 +1,7 @@
 # atto-pi
 
+<img width="512" height="512" alt="atto-pi-1024px" src="https://github.com/user-attachments/assets/7e194ad8-f0e4-4b7b-bfff-06ce14b3ecc5" />
+
 ![Commodore 64 calculating 50000 digits of pi](https://github.com/user-attachments/assets/06a573ca-0f0e-4c05-b425-a32cbac885e8)
 
 Author: John Byrd <johnwbyrd at gmail dot com>
